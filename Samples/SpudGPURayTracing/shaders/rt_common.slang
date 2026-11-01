@@ -29,11 +29,13 @@ public Ray camera_ray(uint2 index, uint2 size, float3 camera, float4 r0, float4 
     float2 screen = xy / float2(size) * 2.0 - 1.0;
     // Up the screen is +Y, as Direct3D's clip space is, and SpudGPU's.
     screen.y = -screen.y;
-    float4 world = row_mul(float4(screen, 0.0, 1.0), r0, r1, r2, r3);
-    world.xyz /= world.w;
+    const float4 world = row_mul(float4(screen, 0.0, 1.0), r0, r1, r2, r3);
+    // Divided into a vector of its own: one written a component at a time
+    // starts from an undefined one, which Metal's compiler refuses.
+    const float3 on_far = world.xyz / world.w;
     Ray ray;
     ray.origin = camera;
-    ray.direction = normalize(world.xyz - camera);
+    ray.direction = normalize(on_far - camera);
     return ray;
 }
 
@@ -43,15 +45,9 @@ public Ray camera_ray(uint2 index, uint2 size, float3 camera, float4 r0, float4 
 public uint3 load_3x16_indices(RWByteAddressBuffer indices, uint offset) {
     const uint aligned = offset & ~3u;
     const uint2 words = indices.Load2(aligned);
-    uint3 result;
-    if (aligned == offset) {
-        result.x = words.x & 0xffffu;
-        result.y = (words.x >> 16) & 0xffffu;
-        result.z = words.y & 0xffffu;
-    } else {
-        result.x = (words.x >> 16) & 0xffffu;
-        result.y = words.y & 0xffffu;
-        result.z = (words.y >> 16) & 0xffffu;
-    }
-    return result;
+    // Each made whole: a vector filled a component at a time starts from an
+    // undefined one, which Metal's compiler refuses to read.
+    if (aligned == offset)
+        return uint3(words.x & 0xffffu, (words.x >> 16) & 0xffffu, words.y & 0xffffu);
+    return uint3((words.x >> 16) & 0xffffu, words.y & 0xffffu, (words.y >> 16) & 0xffffu);
 }

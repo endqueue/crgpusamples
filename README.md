@@ -25,8 +25,8 @@ workaround to invent here.
 | SpudGPUMeshShaders | `D3D12MeshShaders/MeshletRender` | Ported, all backends (see note below) |
 | SpudGPUBundles | `D3D12Bundles` | Ported, Vulkan/D3D12 only (see note below) |
 | SpudGPUDepthBoundsTest | `D3D12DepthBoundsTest` | Ported, all backends (see note below) |
-| SpudGPUHeaps | `D3D12SmallResources` | Ported, all backends; run on D3D12 and Vulkan, not yet on Metal (see note below) |
-| SpudGPURayTracing | `D3D12Raytracing`: `D3D12RaytracingHelloWorld`, `D3D12RaytracingSimpleLighting`, `D3D12RaytracingProceduralGeometry` | Ported with inline ray queries in place of ray tracing pipelines, all backends; run on D3D12 and Vulkan, not yet on Metal (see note below) |
+| SpudGPUHeaps | `D3D12SmallResources` | Ported, all backends; run on D3D12, Vulkan and Metal (see note below) |
+| SpudGPURayTracing | `D3D12Raytracing`: `D3D12RaytracingHelloWorld`, `D3D12RaytracingSimpleLighting`, `D3D12RaytracingProceduralGeometry` | Ported with inline ray queries in place of ray tracing pipelines, all backends; run on D3D12, Vulkan and Metal (see note below) |
 
 `HelloTexture` closed a real gap and worked around another. The gap it
 closed: `spudgpu_cmd_copy_buffer_to_image`/`_copy_image_to_buffer` and
@@ -382,7 +382,20 @@ scratch, the GPU writer) is destroyed once it completes. A frame then
 moves the output to `GENERAL`, traces, moves it back to
 `SHADER_READ_ONLY` and draws it: no object is created in the loop. It was
 first built and run on 2026-10-31, on D3D12 and Vulkan on Windows (see the
-end of this file); it has not run on Metal.
+end of this file), and on 2026-11-01 on Metal (Apple M5 Pro, macOS 27.0.1,
+Debug, Metal API and shader validation with warnings fatal): each mode 300
+frames, exit 0, silent, the instances written by the 72-byte Metal writer
+(`rt_instances_col72_comp`) and drawn the right way up, hello and lighting
+as on D3D12 and procedural with every primitive. Metal's compiler refused
+two things SPIRV-Cross wrote from Slang's SPIR-V under `-Werror`, a vector
+filled a component at a time and an unused candidate transform, so
+`rt_common.slang` builds the index and unprojected vectors whole and
+`candidate_hit` returns the bottom level's normal, transformed only where
+it is used (the same arithmetic; D3D12 and Vulkan not rerun since).
+Every other sample that builds on Metal (HelloTriangle, HelloConstBuffers,
+HelloTexture, SpudGPUExecuteIndirect, SpudGPUMeshShaders,
+SpudGPUDepthBoundsTest, SpudGPUHeaps) ran 300 frames the same day, exit 0,
+silent.
 
 See `../spudlib/CLAUDE.md` and `../CLAUDE.md` for the architecture this
 repo sits alongside.

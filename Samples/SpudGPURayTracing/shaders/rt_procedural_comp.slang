@@ -104,10 +104,10 @@ float3 normal_to_bottom_level(float3 n, Primitive p) {
 
 // A procedural candidate: the intersection shader of its geometry, run on
 // the query's object-space ray. True with the hit's t and world normal.
-bool candidate_hit(float3 object_origin, float3 object_direction, uint geometry_index, float3x4 object_to_world, HitRange range,
-                   out float thit, out float3 world_normal) {
+bool candidate_hit(float3 object_origin, float3 object_direction, uint geometry_index, HitRange range, out float thit,
+                   out float3 bottom_normal) {
     thit = 0.0;
-    world_normal = float3(0.0, 0.0, 0.0);
+    bottom_normal = float3(0.0, 0.0, 0.0);
     if (geometry_index >= PRIMITIVE_COUNT)
         return false;
     const Primitive p = scene.primitives[geometry_index];
@@ -118,7 +118,7 @@ bool candidate_hit(float3 object_origin, float3 object_direction, uint geometry_
     if (!intersect_primitive(to_local(object_ray, p), p.kind.x, p.kind.y, range, frame.time.x,
                              scene.materials[geometry_index].step_scale.x, thit, local_normal))
         return false;
-    world_normal = normalize(mul(object_to_world, float4(normal_to_bottom_level(local_normal, p), 0.0)));
+    bottom_normal = normal_to_bottom_level(local_normal, p);
     return true;
 }
 
@@ -152,10 +152,12 @@ RadianceHit trace_radiance(Ray ray) {
             range.flags = flags;
             float thit;
             float3 n;
-            if (candidate_hit(query.CandidateObjectRayOrigin(), query.CandidateObjectRayDirection(), query.CandidateGeometryIndex(),
-                              query.CandidateObjectToWorld3x4(), range, thit, n)) {
+            if (candidate_hit(query.CandidateObjectRayOrigin(), query.CandidateObjectRayDirection(), query.CandidateGeometryIndex(), range,
+                              thit, n)) {
                 query.CommitProceduralPrimitiveHit(thit);
-                normal = n;
+                // The world normal, only where it is used: a shadow ray's
+                // candidates never read their transform.
+                normal = normalize(mul(query.CandidateObjectToWorld3x4(), float4(n, 0.0)));
             }
         }
     }
@@ -192,8 +194,8 @@ bool trace_shadow(float3 origin, float3 direction, uint depth) {
             range.flags = flags;
             float thit;
             float3 n;
-            if (candidate_hit(query.CandidateObjectRayOrigin(), query.CandidateObjectRayDirection(), query.CandidateGeometryIndex(),
-                              query.CandidateObjectToWorld3x4(), range, thit, n))
+            if (candidate_hit(query.CandidateObjectRayOrigin(), query.CandidateObjectRayDirection(), query.CandidateGeometryIndex(), range,
+                              thit, n))
                 query.CommitProceduralPrimitiveHit(thit);
         }
     }

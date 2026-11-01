@@ -45,7 +45,8 @@ if(WIN32)
     message(STATUS "spudgpusamples shaders: ${_spudgpusamples_v} (${SPUDGPUSAMPLES_DXC})")
 endif()
 # spudgpu_msl, the Metal fallback route's cross-compiler, is a tool spudlib
-# defines for the build machine (not in a cross-compiling build).
+# makes for the build machine, in a cross-compiling build too, and names
+# SPUDGPU_MSL_EXECUTABLE.
 if(NOT TARGET spudgpu_msl)
     message(FATAL_ERROR "spudgpusamples shaders: spudlib defines no spudgpu_msl target")
 endif()
@@ -124,13 +125,31 @@ function(spudgpusamples_add_slang_shader target)
             OUTPUT ${out}.slang.metal ${out}.cross.metal
             COMMAND ${SPUDGPUSAMPLES_SLANGC} ${src} -entry ${entry} -target metal -matrix-layout-column-major
                     -o ${out}.slang.metal
-            COMMAND spudgpu_msl --platform $<IF:$<PLATFORM_ID:iOS>,ios,macos> --msl-version 30100
+            COMMAND ${SPUDGPU_MSL_EXECUTABLE} --platform $<IF:$<PLATFORM_ID:iOS>,ios,macos> --msl-version 30100
                     ${out}.spv ${out}.cross.metal
             DEPENDS ${src} ${modules} ${out}.spv spudgpu_msl
             COMMENT "Slang: ${ARG_SOURCE} to Metal source, both routes")
         list(APPEND outputs ${out}.slang.metal ${out}.cross.metal)
     endif()
 
+    # The SDK Apple's Metal compiler builds for, and its deployment target flag,
+    # so a .metallib loads wherever the code beside it does: macOS, an iOS
+    # device or the iOS simulator (from CMAKE_OSX_SYSROOT), at
+    # CMAKE_OSX_DEPLOYMENT_TARGET where it is set.
+    if(CMAKE_SYSTEM_NAME STREQUAL "iOS" AND CMAKE_OSX_SYSROOT MATCHES "[Ss]imulator")
+        set(metal_sdk iphonesimulator)
+        set(metal_min -mios-simulator-version-min=)
+    elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+        set(metal_sdk iphoneos)
+        set(metal_min -mios-version-min=)
+    else()
+        set(metal_sdk macosx)
+        set(metal_min -mmacosx-version-min=)
+    endif()
+    set(metal_flags "")
+    if(CMAKE_OSX_DEPLOYMENT_TARGET)
+        set(metal_flags ${metal_min}${CMAKE_OSX_DEPLOYMENT_TARGET})
+    endif()
     if(APPLE)
         set(metal_src ${out}.cross.metal)
         list(GET ARG_METAL_ROUTE 0 route)
@@ -139,8 +158,8 @@ function(spudgpusamples_add_slang_shader target)
         endif()
         add_custom_command(
             OUTPUT ${out}.metallib ${out}.metallib.inc
-            COMMAND xcrun -sdk macosx metal -std=metal3.1 -Werror -c ${metal_src} -o ${out}.air
-            COMMAND xcrun -sdk macosx metallib ${out}.air -o ${out}.metallib
+            COMMAND xcrun -sdk ${metal_sdk} metal -std=metal3.1 ${metal_flags} -Werror -c ${metal_src} -o ${out}.air
+            COMMAND xcrun -sdk ${metal_sdk} metallib ${out}.air -o ${out}.metallib
             COMMAND ${CMAKE_COMMAND} -DIN=${out}.metallib -DOUT=${out}.metallib.inc -DNAME=${entry}_metallib -P ${embed}
             DEPENDS ${metal_src} ${embed}
             COMMENT "Metal: ${entry} to a metallib")
