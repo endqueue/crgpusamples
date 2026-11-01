@@ -28,6 +28,11 @@
 #include <corecrt_math_defines.h>
 #endif
 
+// The shaders, Slang built into each format and embedded at build time
+// (../../cmake/spudgpusamples_slang.cmake).
+#include "scene_vert.shader.h"
+#include "scene_frag.shader.h"
+
 #define WINDOW_WIDTH 1280
 #define WINDOW_HEIGHT 720
 
@@ -146,8 +151,8 @@ static void mat4_perspective_rh(float fov_y_radians, float aspect, float z_near,
 	float f = 1.0f / tanf(fov_y_radians * 0.5f);
 	memset(out, 0, sizeof(float) * 16);
 	out[0] = f / aspect;
-	// Negated: SpudGPU's clip space is Vulkan's on every backend, +Y down.
-	out[5] = -f;
+	// Not negated: SpudGPU's clip space is +Y up on every backend.
+	out[5] = f;
 	out[10] = z_far / (z_near - z_far);
 	out[11] = -1.0f;
 	out[14] = (z_near * z_far) / (z_near - z_far);
@@ -317,32 +322,6 @@ static void *read_entire_file(const char *path, size_t *out_size) {
 	fclose(f);
 	*out_size = (size_t) size;
 	return buffer;
-}
-
-// NULL, printed, on failure.
-static spudgpu_shader_module load_shader_module(
-    spudgpu_device device,
-    const char *path,
-    SPUDGPU_SHADER_STAGE stage) {
-	size_t code_size;
-	void *code = read_entire_file(path, &code_size);
-	if (!code)
-		return NULL;
-
-	spudgpu_shader_module_desc desc = {
-	    .base = {SPUD_STRUCT_TYPE_GPU_SHADER_MODULE_DESC, NULL},
-	    .stage      = stage,
-	    .spirv_code = code,
-	    .spirv_size = code_size,
-	};
-	spudgpu_shader_module module = NULL;
-	SPUDRESULT result            = spudgpu_create_shader_module(device, &desc, &module);
-	free(code);
-	if (SPUDFAIL(result)) {
-		fprintf(stderr, "spudgpu_create_shader_module failed for %s: %d\n", path, result);
-		return NULL;
-	}
-	return module;
 }
 
 // Uploads `pixels` (tightly packed, width*height*4 bytes) into a freshly
@@ -518,6 +497,9 @@ int main(int argc, char **argv) {
 	SPUDGPU_BINDLESS_LIMITS bindless_limits       = {.base = {SPUD_STRUCT_TYPE_GPU_BINDLESS_LIMITS, NULL}};
 	SPUDGPU_ADAPTER_PROPERTIES adapter_properties = {.base = {SPUD_STRUCT_TYPE_GPU_ADAPTER_PROPERTIES, &bindless_limits.base}};
 	spudgpu_get_adapter_properties(adapter, &adapter_properties);
+	// The one shader format the adapter takes: each module below is made
+	// from the embedded code in it.
+	const SPUDGPU_SHADER_FORMAT shader_format = spudgpusamples_shader_format(adapter_properties.shader_formats);
 	printf("Using device: %s\n", adapter_properties.description);
 
 	if (!(adapter_properties.supported_features & SPUDGPU_FEATURE_BINDLESS)) {
@@ -781,8 +763,8 @@ int main(int argc, char **argv) {
 	// Pipeline + depth buffer.
 	// ------------------------------------------------------------------
 
-	vertex_module   = load_shader_module(device, "shaders/scene.vert.spv", SPUDGPU_SHADER_STAGE_VERTEX);
-	fragment_module = load_shader_module(device, "shaders/scene.frag.spv", SPUDGPU_SHADER_STAGE_FRAGMENT);
+	vertex_module   = spudgpusamples_create_shader_module(device, shader_format, &scene_vert_shader, SPUDGPU_SHADER_STAGE_VERTEX, 0, 0, 0);
+	fragment_module = spudgpusamples_create_shader_module(device, shader_format, &scene_frag_shader, SPUDGPU_SHADER_STAGE_FRAGMENT, 0, 0, 0);
 	if (!vertex_module || !fragment_module)
 		goto cleanup;
 

@@ -44,6 +44,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+// The shaders, Slang built into each format and embedded at build time
+// (../../cmake/spudgpusamples_slang.cmake).
+#include "heaps_vert.shader.h"
+#include "heaps_frag.shader.h"
+
 #define WINDOW_WIDTH 1280
 #define WINDOW_HEIGHT 720
 
@@ -74,52 +79,6 @@ static bool check(SPUDRESULT result, const char *what) {
 
 static uint64_t align_up(uint64_t value, uint64_t alignment) {
 	return (value + alignment - 1) / alignment * alignment;
-}
-
-// NULL, printed, if the file can't be read.
-static void *read_entire_file(const char *path, size_t *out_size) {
-	FILE *f = fopen(path, "rb");
-	if (!f) {
-		fprintf(stderr, "Failed to open file: %s\n", path);
-		return NULL;
-	}
-	fseek(f, 0, SEEK_END);
-	long size = ftell(f);
-	fseek(f, 0, SEEK_SET);
-	void *buffer = malloc((size_t) size);
-	if (!buffer) {
-		fprintf(stderr, "No memory for file: %s\n", path);
-		fclose(f);
-		return NULL;
-	}
-	fread(buffer, 1, (size_t) size, f);
-	fclose(f);
-	*out_size = (size_t) size;
-	return buffer;
-}
-
-// NULL, printed, on failure.
-static spudgpu_shader_module load_shader_module(
-    spudgpu_device device,
-    const char *path,
-    SPUDGPU_SHADER_STAGE stage) {
-	size_t code_size;
-	void *code = read_entire_file(path, &code_size);
-	if (!code)
-		return NULL;
-
-	spudgpu_shader_module_desc desc = {
-	    .base = {SPUD_STRUCT_TYPE_GPU_SHADER_MODULE_DESC, NULL},
-	    .stage      = stage,
-	    .spirv_code = code,
-	    .spirv_size = code_size,
-	};
-	spudgpu_shader_module module = NULL;
-	SPUDRESULT result            = spudgpu_create_shader_module(device, &desc, &module);
-	free(code);
-	if (!check(result, path))
-		return NULL;
-	return module;
 }
 
 // D3D12SmallResources::GenerateTexture: an 8 x 8 checkerboard of black and
@@ -380,6 +339,9 @@ int main(int argc, char **argv) {
 
 	SPUDGPU_ADAPTER_PROPERTIES adapter_properties = {.base = {SPUD_STRUCT_TYPE_GPU_ADAPTER_PROPERTIES, NULL}};
 	spudgpu_get_adapter_properties(adapter, &adapter_properties);
+	// The one shader format the adapter takes: each module below is made
+	// from the embedded code in it.
+	const SPUDGPU_SHADER_FORMAT shader_format = spudgpusamples_shader_format(adapter_properties.shader_formats);
 
 	// Upload heaps where the adapter has them; buffers otherwise.
 	const bool mappable_heaps = (adapter_properties.supported_features & SPUDGPU_FEATURE_MAPPABLE_HEAPS) != 0;
@@ -457,12 +419,12 @@ int main(int argc, char **argv) {
 		for (uint32_t row = 0; row < GRID_HEIGHT; row++) {
 			float x = start_x;
 			for (uint32_t column = 0; column < GRID_WIDTH; column++) {
-				// Y negated: SpudGPU's clip space is Vulkan's on every
-				// backend, +Y down, and the original's is +Y up.
-				quad_vertices[index++] = (Vertex) {{x, -(y - offset_y), 0.0f}, {0.0f, 0.0f}};
-				quad_vertices[index++] = (Vertex) {{x, -y, 0.0f}, {0.0f, 1.0f}};
-				quad_vertices[index++] = (Vertex) {{x + offset_x, -(y - offset_y), 0.0f}, {1.0f, 0.0f}};
-				quad_vertices[index++] = (Vertex) {{x + offset_x, -y, 0.0f}, {1.0f, 1.0f}};
+				// SpudGPU's clip space is +Y up on every backend, as the
+				// original's is: the original's positions as they are.
+				quad_vertices[index++] = (Vertex) {{x, y - offset_y, 0.0f}, {0.0f, 0.0f}};
+				quad_vertices[index++] = (Vertex) {{x, y, 0.0f}, {0.0f, 1.0f}};
+				quad_vertices[index++] = (Vertex) {{x + offset_x, y - offset_y, 0.0f}, {1.0f, 0.0f}};
+				quad_vertices[index++] = (Vertex) {{x + offset_x, y, 0.0f}, {1.0f, 1.0f}};
 				x += offset_x + margin_x;
 			}
 			y -= offset_y + margin_y;
@@ -668,8 +630,8 @@ int main(int argc, char **argv) {
 	write_texture_sets(device, &textures, texture_sets, sampler);
 	set_title(window, &textures);
 
-	vertex_module   = load_shader_module(device, "shaders/heaps.vert.spv", SPUDGPU_SHADER_STAGE_VERTEX);
-	fragment_module = load_shader_module(device, "shaders/heaps.frag.spv", SPUDGPU_SHADER_STAGE_FRAGMENT);
+	vertex_module   = spudgpusamples_create_shader_module(device, shader_format, &heaps_vert_shader, SPUDGPU_SHADER_STAGE_VERTEX, 0, 0, 0);
+	fragment_module = spudgpusamples_create_shader_module(device, shader_format, &heaps_frag_shader, SPUDGPU_SHADER_STAGE_FRAGMENT, 0, 0, 0);
 	if (!vertex_module || !fragment_module)
 		goto cleanup;
 

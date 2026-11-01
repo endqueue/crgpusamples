@@ -1,36 +1,22 @@
 add_executable(SpudGPUDynamicIndexing main.c)
 target_link_libraries(SpudGPUDynamicIndexing PRIVATE spudlib SDL3::SDL3)
 
-# Shaders are SPIR-V regardless of GRAPHICS_BACKEND -- see
-# HelloConstBuffers/CMakeLists.txt for why glslc is the one shader toolchain
-# both backends need. This sample only ever builds against Vulkan/D3D12
-# (see spudgpusamples/CMakeLists.txt's GRAPHICS_BACKEND guard -- bindless
+# Shaders are Slang, built at build time into the adapter's own format
+# (SPIR-V, DXIL on Windows, a .metallib on Apple platforms) and embedded
+# in the executable -- SpudGPU compiles nothing, see
+# ../../cmake/spudgpusamples_slang.cmake.
+# This sample only ever builds against Vulkan/D3D12 (see
+# spudgpusamples/CMakeLists.txt's GRAPHICS_BACKEND guard -- bindless
 # descriptor indexing isn't implemented on Metal yet).
-find_package(Vulkan REQUIRED)
-if(NOT Vulkan_GLSLC_EXECUTABLE)
-    message(FATAL_ERROR "glslc not found. Install the Vulkan SDK.")
-endif()
-
-set(SPUDGPUDYNAMICINDEXING_SHADER_OUTDIR "$<TARGET_FILE_DIR:SpudGPUDynamicIndexing>/shaders")
-
-function(spudgpudynamicindexing_compile_shader SHADER)
-    get_filename_component(NAME ${SHADER} NAME)
-    set(SPV "${CMAKE_CURRENT_BINARY_DIR}/${NAME}.spv")
-    add_custom_command(
-            OUTPUT ${SPV}
-            COMMAND ${CMAKE_COMMAND} -E make_directory "${SPUDGPUDYNAMICINDEXING_SHADER_OUTDIR}"
-            COMMAND ${Vulkan_GLSLC_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/${SHADER} -o ${SPV}
-            COMMAND ${CMAKE_COMMAND} -E copy ${SPV} "${SPUDGPUDYNAMICINDEXING_SHADER_OUTDIR}/${NAME}.spv"
-            DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${SHADER}
-    )
-    target_sources(SpudGPUDynamicIndexing PRIVATE ${SPV})
-endfunction()
-
-spudgpudynamicindexing_compile_shader(shaders/scene.vert)
-spudgpudynamicindexing_compile_shader(shaders/scene.frag)
+spudgpusamples_add_slang_shader(SpudGPUDynamicIndexing SOURCE shaders/scene_vert.slang DXIL_PROFILE vs_6_0)
+spudgpusamples_add_slang_shader(SpudGPUDynamicIndexing SOURCE shaders/scene_frag.slang DXIL_PROFILE ps_6_0
+    # Its unsized texture array is SpudGPU's bindless table, which the Metal
+    # backend doesn't have: spudgpu_msl refuses a runtime-sized array outside
+    # a device argument buffer, and the sample never builds on Metal.
+    NO_METAL "bindless texture table")
 
 # occcity.bin (the mesh + diffuse texture data, copied from d3d12samples) is
-# loaded via a plain relative path at runtime, same as the shaders above.
+# loaded via a plain relative path at runtime.
 add_custom_command(TARGET SpudGPUDynamicIndexing POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/occcity.bin" "$<TARGET_FILE_DIR:SpudGPUDynamicIndexing>")

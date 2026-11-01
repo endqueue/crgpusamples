@@ -37,6 +37,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+// The shaders, Slang built into each format and embedded at build time
+// (../../cmake/spudgpusamples_slang.cmake).
+#include "texture_vert.shader.h"
+#include "texture_frag.shader.h"
+
 #define WINDOW_WIDTH 1280
 #define WINDOW_HEIGHT 720
 
@@ -47,54 +52,6 @@ typedef struct Vertex {
 	float position[3];
 	float uv[2];
 } Vertex;
-
-// NULL, printed, if the file can't be read.
-static void *read_entire_file(const char *path, size_t *out_size) {
-	FILE *f = fopen(path, "rb");
-	if (!f) {
-		fprintf(stderr, "Failed to open file: %s\n", path);
-		return NULL;
-	}
-	fseek(f, 0, SEEK_END);
-	long size = ftell(f);
-	fseek(f, 0, SEEK_SET);
-	void *buffer = malloc((size_t) size);
-	if (!buffer) {
-		fprintf(stderr, "No memory for file: %s\n", path);
-		fclose(f);
-		return NULL;
-	}
-	fread(buffer, 1, (size_t) size, f);
-	fclose(f);
-	*out_size = (size_t) size;
-	return buffer;
-}
-
-// NULL, printed, on failure.
-static spudgpu_shader_module load_shader_module(
-    spudgpu_device device,
-    const char *path,
-    SPUDGPU_SHADER_STAGE stage) {
-	size_t code_size;
-	void *code = read_entire_file(path, &code_size);
-	if (!code)
-		return NULL;
-
-	spudgpu_shader_module_desc desc = {
-	    .base = {SPUD_STRUCT_TYPE_GPU_SHADER_MODULE_DESC, NULL},
-	    .stage      = stage,
-	    .spirv_code = code,
-	    .spirv_size = code_size,
-	};
-	spudgpu_shader_module module = NULL;
-	SPUDRESULT result            = spudgpu_create_shader_module(device, &desc, &module);
-	free(code);
-	if (SPUDFAIL(result)) {
-		fprintf(stderr, "spudgpu_create_shader_module failed for %s: %d\n", path, result);
-		return NULL;
-	}
-	return module;
-}
 
 // Generates a simple black/white checkerboard, matching the original
 // sample's D3D12HelloTexture::GenerateTextureData exactly (8x8 cells).
@@ -279,6 +236,9 @@ int main(int argc, char **argv) {
 
 	SPUDGPU_ADAPTER_PROPERTIES adapter_properties = {.base = {SPUD_STRUCT_TYPE_GPU_ADAPTER_PROPERTIES, NULL}};
 	spudgpu_get_adapter_properties(adapter, &adapter_properties);
+	// The one shader format the adapter takes: each module below is made
+	// from the embedded code in it.
+	const SPUDGPU_SHADER_FORMAT shader_format = spudgpusamples_shader_format(adapter_properties.shader_formats);
 	printf("Using device: %s\n", adapter_properties.description);
 
 	// A window to present to and one direct queue, and exactly the features
@@ -341,11 +301,11 @@ int main(int argc, char **argv) {
 	// written once -- same aspect-ratio-corrected shape as the original.
 	float aspect_ratio = (float) WINDOW_WIDTH / (float) WINDOW_HEIGHT;
 	Vertex vertices[3] = {
-	    // SpudGPU's clip space is Vulkan's on every backend, +Y down: the
-	    // original's Y negated, so the apex is at the top.
-	    {{0.0f, -0.25f * aspect_ratio, 0.0f}, {0.5f, 0.0f}},
-	    {{0.25f, 0.25f * aspect_ratio, 0.0f}, {1.0f, 1.0f}},
-	    {{-0.25f, 0.25f * aspect_ratio, 0.0f}, {0.0f, 1.0f}},
+	    // SpudGPU's clip space is +Y up on every backend, as the original's
+	    // is: its vertices as they are, the apex at the top.
+	    {{0.0f, 0.25f * aspect_ratio, 0.0f}, {0.5f, 0.0f}},
+	    {{0.25f, -0.25f * aspect_ratio, 0.0f}, {1.0f, 1.0f}},
+	    {{-0.25f, -0.25f * aspect_ratio, 0.0f}, {0.0f, 1.0f}},
 	};
 
 	spudgpu_buffer_desc vertex_buffer_desc = {
@@ -486,8 +446,8 @@ int main(int argc, char **argv) {
 	};
 	spudgpu_update_descriptor_sets(device, texture_writes, 2);
 
-	vertex_module   = load_shader_module(device, "shaders/texture.vert.spv", SPUDGPU_SHADER_STAGE_VERTEX);
-	fragment_module = load_shader_module(device, "shaders/texture.frag.spv", SPUDGPU_SHADER_STAGE_FRAGMENT);
+	vertex_module   = spudgpusamples_create_shader_module(device, shader_format, &texture_vert_shader, SPUDGPU_SHADER_STAGE_VERTEX, 0, 0, 0);
+	fragment_module = spudgpusamples_create_shader_module(device, shader_format, &texture_frag_shader, SPUDGPU_SHADER_STAGE_FRAGMENT, 0, 0, 0);
 	if (!vertex_module || !fragment_module)
 		goto cleanup;
 

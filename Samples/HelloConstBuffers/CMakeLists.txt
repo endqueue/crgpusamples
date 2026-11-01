@@ -1,31 +1,12 @@
 add_executable(HelloConstBuffers main.c)
 target_link_libraries(HelloConstBuffers PRIVATE spudlib SDL3::SDL3)
 
-# Shaders are SPIR-V regardless of GRAPHICS_BACKEND -- the D3D12 backend
-# cross-compiles SPIR-V to HLSL at runtime via SPIRV-Cross (see
-# spudlib/CLAUDE.md), so glslc is the one shader toolchain both backends need.
-find_package(Vulkan REQUIRED)
-if(NOT Vulkan_GLSLC_EXECUTABLE)
-    message(FATAL_ERROR "glslc not found. Install the Vulkan SDK.")
-endif()
-
-set(HELLOCONSTBUFFERS_SHADER_OUTDIR "$<TARGET_FILE_DIR:HelloConstBuffers>/shaders")
-
-function(helloconstbuffers_compile_shader SHADER)
-    get_filename_component(NAME ${SHADER} NAME)
-    set(SPV "${CMAKE_CURRENT_BINARY_DIR}/${NAME}.spv")
-    add_custom_command(
-            OUTPUT ${SPV}
-            COMMAND ${CMAKE_COMMAND} -E make_directory "${HELLOCONSTBUFFERS_SHADER_OUTDIR}"
-            COMMAND ${Vulkan_GLSLC_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/${SHADER} -o ${SPV}
-            COMMAND ${CMAKE_COMMAND} -E copy ${SPV} "${HELLOCONSTBUFFERS_SHADER_OUTDIR}/${NAME}.spv"
-            DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${SHADER}
-    )
-    target_sources(HelloConstBuffers PRIVATE ${SPV})
-endfunction()
-
-helloconstbuffers_compile_shader(shaders/scene.vert)
-helloconstbuffers_compile_shader(shaders/scene.frag)
+# Shaders are Slang, built at build time into the adapter's own format
+# (SPIR-V, DXIL on Windows, a .metallib on Apple platforms) and embedded
+# in the executable -- SpudGPU compiles nothing, see
+# ../../cmake/spudgpusamples_slang.cmake.
+spudgpusamples_add_slang_shader(HelloConstBuffers SOURCE shaders/scene_vert.slang DXIL_PROFILE vs_6_0)
+spudgpusamples_add_slang_shader(HelloConstBuffers SOURCE shaders/scene_frag.slang DXIL_PROFILE ps_6_0)
 
 if(WIN32)
     add_custom_command(TARGET HelloConstBuffers POST_BUILD

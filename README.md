@@ -9,8 +9,8 @@ equivalent `spudgpu_*` call.
 
 The point isn't a demo reel — it's a maturity test for SpudLib. Every sample
 that ports cleanly validates a slice of SpudGPU's API; every sample that
-*can't* port (no raytracing pipeline, no VRS, no cross-adapter API as of this
-writing) is a concrete, prioritized gap to close in `spudlib` itself — not a
+*can't* port as written (no ray tracing pipeline, no VRS, no cross-adapter
+API as of this writing) is a concrete, prioritized gap to close in `spudlib` itself — not a
 workaround to invent here.
 
 ## Status
@@ -26,6 +26,7 @@ workaround to invent here.
 | SpudGPUBundles | `D3D12Bundles` | Ported, Vulkan/D3D12 only (see note below) |
 | SpudGPUDepthBoundsTest | `D3D12DepthBoundsTest` | Ported, all backends (see note below) |
 | SpudGPUHeaps | `D3D12SmallResources` | Ported, all backends; run on D3D12 and Vulkan, not yet on Metal (see note below) |
+| SpudGPURayTracing | `D3D12Raytracing`: `D3D12RaytracingHelloWorld`, `D3D12RaytracingSimpleLighting`, `D3D12RaytracingProceduralGeometry` | Ported with inline ray queries in place of ray tracing pipelines, all backends; run on D3D12 and Vulkan, not yet on Metal (see note below) |
 
 `HelloTexture` closed a real gap and worked around another. The gap it
 closed: `spudgpu_cmd_copy_buffer_to_image`/`_copy_image_to_buffer` and
@@ -141,8 +142,8 @@ different flavor from bindless's (the macro is `1` everywhere; it's *runtime*
 driver/hardware support that varies, surfaced via
 `spudgpu_get_mesh_shading_capabilities`). The sample renders the real
 `Dragon_LOD0.bin` meshlet asset shipped with the original D3D12 sample,
-one GLSL mesh shader (`GL_EXT_mesh_shader`) cross-compiled to all three
-targets exactly like every other sample's shaders. This sample's four
+one Slang mesh shader built for all three backends exactly like every other
+sample's shaders (see Building below). This sample's four
 meshlet data buffers need `SPUDGPU_BUFFER_USAGE_STORAGE`, which
 `SPUDGPU_MEMORY_KIND_UPLOAD` refuses on every backend — the rule comes from
 D3D12, where an UPLOAD-heap resource can't carry
@@ -282,10 +283,106 @@ in two:
   driver reports.
 
 The sample was written against SpudGPU's heap calls the day they landed. It
-type-checks against the Vulkan and Metal configurations of `spudgpu.h` and
-its shaders compile with glslang. It was first built and run on 2026-10-22,
+type-checks against the Vulkan and Metal configurations of `spudgpu.h`
+(its shaders were then GLSL, compiled with glslang). It was first built and run on 2026-10-22,
 on D3D12 and Vulkan on Windows (see the end of this file); it has not run on
 Metal.
+
+`SpudGPURayTracing` is the three tutorials of Microsoft's
+`D3D12Raytracing` (`Samples/Desktop/D3D12Raytracing/src/` in
+`DirectX-Graphics-Samples`, MIT License), written again in SpudGPU's C and
+in Slang, as one sample with three modes chosen with `--mode`:
+
+- `hello` (`D3D12RaytracingHelloWorld`): the triangle traced in screen
+  space with orthographic rays along +z, inside the original's stencil
+  window (a 0.1 border), its hits coloured by their barycentrics and its
+  misses black; outside the window each pixel is its place in the target,
+  as the original's ray generation shader writes it.
+- `lighting` (`D3D12RaytracingSimpleLighting`): the original's cube (its 24
+  vertices with face normals and 36 16-bit indices), its camera going round
+  in 24 seconds and its point light in 8 the other way, diffuse plus
+  ambient from its constants, the miss its dark blue.
+- `procedural` (`D3D12RaytracingProceduralGeometry`): the ground plane, a
+  triangle bottom level scaled out by its instance, with its filtered
+  checkers; and every procedural primitive of the original, in an AABB
+  bottom level of ten geometries: the analytic box and spheres, the
+  volumetric metaballs, and the seven signed distance primitives (mini
+  spheres, an intersected round cube, a square torus, a twisted torus, a
+  cog, cylinders and the fractal pyramid), with the original's materials,
+  its animation (`G`; the camera's `C` and the light's `L` off at start,
+  as there), shadow rays, and reflections to its recursion depth of 3. The
+  inline form carries all of them: an intersection shader is code, and a
+  procedural candidate runs the same code. The signed distance functions
+  are Inigo Quilez's (MIT), as the original credits them.
+
+It asks for `SPUDGPU_FEATURE_RAY_QUERY` and, on an adapter without it,
+prints that the device has no ray queries and exits 1, as
+`SpudGPUMeshShaders` does without mesh shading. `SPUDGPU_EXT_RAY_QUERY` is
+1 on every backend, so it builds everywhere. The port deviates from the
+originals in these ways:
+
+- **Inline ray queries, not ray tracing pipelines.** The originals are DXR
+  1.0: state objects, shader tables, and ray generation, miss,
+  closest-hit and intersection shaders. SpudGPU has no ray tracing
+  pipeline EXT (card S12), so each mode traces with inline ray queries
+  (DXR 1.1's form; `SPV_KHR_ray_query`, `RayQuery`, Metal's
+  `intersection_query`) in one compute shader,
+  `shaders/rt_<mode>_comp.slang`, and the original's stages are functions
+  of it: the ray generation shader is its body; the closest-hit and miss
+  shaders are the two ends of a query's committed status; the
+  intersection shaders (`shaders/rt_primitives.slang`) are what each
+  procedural candidate runs before it is committed, with the query's t
+  min, committed t and flags standing in for `RayTMin()`, `RayTCurrent()`
+  and `RayFlags()`. Which primitive and material a candidate is comes from
+  its geometry index, where the original reads its hit group's local root
+  arguments from the shader table. `TraceRay`'s recursion in the
+  procedural mode is a loop over the bounces: a hit's colour in the
+  original is linear in its reflected ray's, so each bounce adds its own
+  term, weighted by what the bounces before it pass on, which gives the
+  original's result. The pictures match; the shader structure doesn't.
+- **The output is drawn onto the back buffer, not copied.** The originals
+  copy their `R8G8B8A8_UNORM` output texture to the back buffer
+  (`CopyResource`). Here the trace writes a storage image of that format,
+  and a pass of one triangle over the target (`shaders/rt_present_*.slang`)
+  loads it, texel for pixel, into the swap chain's `B8G8R8A8_UNORM` back
+  buffer, which is neither a copy destination nor a storage image unless
+  asked for.
+- **What changes each frame is pushed.** The originals keep a constant
+  buffer per frame in flight, and the procedural one a buffer of each
+  primitive's transforms, rewritten every frame. Here the scene's fixed
+  constants are a uniform buffer written once, and each frame pushes only
+  what moves (the projection-to-world rows, the camera and the light, and
+  in the procedural mode the animation time); the procedural shader makes
+  each primitive's transform (its scale, a turn about y, a move to its
+  AABB's centre: the original's) from per-primitive data.
+- **Instances written both ways (card S14).** Instances are in the
+  device's layout (`spudgpu_get_acceleration_structure_instance_layout()`).
+  The hello and lighting modes write theirs on the CPU with
+  `spudgpu_write_acceleration_structure_instances()` into an upload buffer
+  the top level reads. The procedural mode writes the plane's that way and
+  copies it into a buffer of the device's memory, where the AABBs' is
+  written by the sample's own compute shader for the layout's kind
+  (`shaders/rt_instances_row64_comp.slang` for Vulkan and D3D12,
+  `rt_instances_col72_comp.slang` for Metal's 72-byte layout), so that
+  both writers run before the top level is built.
+- Smaller ones: the shadow ray's `RAY_FLAG_SKIP_CLOSEST_HIT_SHADER` has no
+  meaning for a query and is dropped (the first hit ends it); the title
+  shows no frame rate or rays a second; there is no Alt+Enter full screen,
+  and the window can't be resized, as no sample's can.
+
+The acceleration structures are built once, in one setup submission: the
+geometry staged into a buffer of the device's memory, the bottom levels in
+one build call, the top level after a barrier, one scratch buffer with a
+range for each build at the device's scratch alignment, and the barriers
+`spudgpu.h` states (scratch to `ACCELERATION_STRUCTURE_SCRATCH`, inputs to
+`ACCELERATION_STRUCTURE_BUILD_INPUT`, `BUILD_WRITE` to `BUILD_READ`
+between the levels, `BUILD_WRITE` to `TRACE` before the first frame).
+What only that submission used (the staging buffers, the instances, the
+scratch, the GPU writer) is destroyed once it completes. A frame then
+moves the output to `GENERAL`, traces, moves it back to
+`SHADER_READ_ONLY` and draws it: no object is created in the loop. It was
+first built and run on 2026-10-31, on D3D12 and Vulkan on Windows (see the
+end of this file); it has not run on Metal.
 
 See `../spudlib/CLAUDE.md` and `../CLAUDE.md` for the architecture this
 repo sits alongside.
@@ -305,7 +402,50 @@ cmake --build --preset windows-vulkan-debug --target HelloTriangle
 
 Every preset is multi-config: `-debug`, `-release` and `-relwithdebinfo` build
 presets pick the configuration, and each sample lands in
-`build-<preset>/Samples/<Sample>/<Config>/` with its shaders beside it.
+`build-<preset>/Samples/<Sample>/<Config>/`. Built from the workspace root
+(`../CMakeLists.txt`, Windows and Linux), every sample lands in `<Config>/`
+under the root's build directory instead.
+
+### Shaders
+
+SpudGPU compiles no shader: a module takes code in the one format its
+adapter reports (`SPUDGPU_ADAPTER_PROPERTIES::shader_formats`): SPIR-V on
+Vulkan, DXIL on D3D12, a `.metallib` on Metal. Each sample's shaders are
+Slang (`Samples/<Sample>/shaders/<stem>.slang`, one entry point each, named
+for the file's stem, never `main`), built at build time by
+`cmake/spudgpusamples_slang.cmake`, which follows spudlib's own step for its
+test shaders (`../spudlib/cmake/spud_slang.cmake`):
+
+- SPIR-V 1.5 on every platform (`slangc -fvk-use-entrypoint-name
+  -matrix-layout-column-major -warnings-as-errors all`, plus the mesh
+  shader's `spvMeshShadingEXT` and the ray query shaders'
+  `spvRayQueryKHR`), checked by `spirv-val`.
+- DXIL on Windows: Slang writes HLSL and DXC compiles it
+  (`dxc -T <profile> -E <entry> -WX`; `vs_6_0`, `ps_6_0`, `cs_6_0`,
+  `ms_6_5` for the mesh shader and `cs_6_5` for the ray query shaders),
+  its validator signing what it passes.
+- Shared code is a Slang module a shader imports from beside it
+  (`SpudGPURayTracing`'s `rt_common.slang` and `rt_primitives.slang`),
+  named in the call's `DEPENDS`, so that a change to one builds its
+  importers again.
+- Metal source by both routes on every platform, kept as build outputs:
+  Slang's own, and SPIR-V through spudlib's `spudgpu_msl` tool (the
+  `spudgpu_msl` target). A shader that neither route takes is marked
+  `NO_METAL` with its reason (`SpudGPUDynamicIndexing`'s bindless fragment
+  shader, a sample that never builds on Metal).
+- On Apple platforms, a `.metallib` from the route the shader names
+  (`spudgpu_msl`'s unless `METAL_ROUTE SLANG`, card S21; Metal 3.1).
+
+Each binary is embedded in the executable as a C array
+(`cmake/spudgpusamples_embed.cmake`); a generated `<stem>.shader.h` declares
+`<stem>_shader` with the entry point and the code in each format the build
+made, and `Samples/spudgpusamples_shader.h` makes a module from it in the
+adapter's format. Nothing is read from disk at run time but the samples'
+`.bin` assets. `slangc`, `spirv-val` and `dxc` come from the Vulkan SDK
+(`VULKAN_SDK`); their versions are printed at configure time.
+
+SpudGPU's clip space is +Y up on every backend, as Direct3D's is, so the
+samples use the originals' clip-space vertices and projections unflipped.
 
 On Apple Silicon, samples also build and run against `GRAPHICS_BACKEND=Metal`
 (see `spudlib/CLAUDE.md`) — except `SpudGPUDynamicIndexing`, which needs
@@ -325,8 +465,15 @@ Every sample takes two optional arguments:
   window does, through the same cleanup. Without it a sample runs until its
   window is closed. Use it to run a sample unattended, under a validation
   layer or a debugger.
-- `--device N`: use the Nth device `spudgpu_enumerate_devices` lists (0 if
+- `--device N`: use the Nth adapter `spudgpu_enumerate_adapters` lists (0 if
   not given).
+
+`SpudGPURayTracing` also takes `--mode hello|lighting|procedural`, which of
+the three originals it is (`hello` if not given). Without `--device` it
+takes the first adapter whose `supported_features` has
+`SPUDGPU_FEATURE_RAY_QUERY` and `SPUDGPU_FEATURE_PRESENT`, the features its
+device is created with: chosen by what the adapter can do, never by its
+name or vendor, so the choice is the same on every backend.
 
 Every sample's swap chain names `SPUDGPU_PRESENT_SCALING_ONE_TO_ONE`: its
 window can't be resized and its back buffers are the window's size, so
@@ -499,3 +646,56 @@ scale. Run again, all six draw the right way up, still with no validation
 message. `SpudGPUMeshShaders` has the same projection and also culls with
 D3D12's clockwise front faces, which the flip reverses; it is left as it
 was until it can be run on a device with mesh shading.
+
+## Ray tracing run, 2026-10-31
+
+`SpudGPURayTracing`'s first build and run, on Windows 11 (ThinkPad P1 Gen
+5), Debug, from the workspace root's `build-windows-d3d12` and
+`build-windows-vulkan` (the sample target alone: the root build stops in
+libdemo, which is deprecated), with slangc 2026.17 and DXC 1.9.0.5512 from
+the Vulkan SDK 1.4.363.0; the RTX A2000's driver is 597.30. It built with
+no warning. Every run below is `--frames 300`, from the executable's own
+directory, in each of the three modes:
+
+| Backend, adapter | Validation | Result |
+|---|---|---|
+| D3D12, RTX A2000 (`--device 1`) | debug layer; GPU-based validation (`d3dconfig`, scoped to the sample, set back after) | exit 0, no message |
+| D3D12, Iris Xe (`--device 0`) | debug layer | refused: "doesn't support ray queries (no SPUDGPU_FEATURE_RAY_QUERY)", exit 1, no message |
+| D3D12, WARP (`--device 2`) | debug layer; GPU-based validation (hello and lighting) | WARP reports ray queries (raytracing tier 1.1) and draws all three modes as the A2000 does: exit 0, no message. The procedural mode takes about 0.4 s a frame there (60 frames in 26 s; 300 in 123 s) |
+| Vulkan, RTX A2000 (`--device 1`) | validation layer (errors, warnings, performance warnings); synchronization validation (`VK_LAYER_VALIDATE_SYNC=1`); GPU-assisted validation (`VK_LAYER_GPUAV_ENABLE=1`) | exit 0, no message but GPU-AV's notices of its own settings |
+| Vulkan, Iris Xe (`--device 0`) | the same three | refused as on D3D12, exit 1, no message |
+
+The first D3D12 run found one bug of the sample's own, fixed: it unmapped
+its scene constants a second time at exit (debug layer error 310).
+
+Each mode was screenshotted on the RTX A2000 on both backends and compared
+by eye with the original's `Screenshot.png`:
+
+- hello: the same picture as the original's, pixel geometry and colours
+  alike: the stencil window's border (black at the top left, red at the
+  top right, green at the bottom left, yellow at the bottom right), the
+  black window, and the triangle with its apex red at the top, green at
+  the bottom left and blue at the bottom right. D3D12 and Vulkan look the
+  same.
+- lighting: the cube at the original's size and place in the frame, the
+  same dark blue background, faces lit away from the light at the 0.5
+  grey of the ambient and lit faces shading towards red. The cube is
+  turned another way and lit on another face than in the original's
+  capture, and between the two backends' captures: the camera and the
+  light go round all the time, and each capture is of another moment.
+- procedural: the original's scene, every primitive where the original
+  has it and of its colour and material: the red cylinders, the green
+  round cube, the reflective square torus, the fractal pyramid, the
+  spheres, the green mini spheres, the red box, the twisted torus, the cog
+  and the metaballs; shadows, reflections in the plane and in the chrome,
+  the checkers fading into the sky. What differs is the animation's
+  phase (the metaballs' shape, the turn of the spheres, twisted torus and
+  cog), as between the two backends' captures; the metaballs' edge shows
+  the same thin light fringe in the original. WARP's capture is the same
+  picture.
+- Every capture differs from the originals' in the title bar only by
+  what it says: the originals show the frame rate and rays a second.
+
+Not run on Metal (written for it: the Metal sources of every shader are
+build outputs here, and the 72-byte instance writer is chosen by the
+layout's kind, but nothing was compiled for Apple); Linux not built.

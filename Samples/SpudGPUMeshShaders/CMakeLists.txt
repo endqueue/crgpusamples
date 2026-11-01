@@ -1,36 +1,18 @@
 add_executable(SpudGPUMeshShaders main.c)
 target_link_libraries(SpudGPUMeshShaders PRIVATE spudlib SDL3::SDL3)
 
-# Shaders are SPIR-V regardless of GRAPHICS_BACKEND -- see
-# HelloConstBuffers/CMakeLists.txt for why glslc is the one shader toolchain
-# every backend needs. Mesh shaders (GL_EXT_mesh_shader) need SPIR-V 1.4+,
-# which glslc only emits when explicitly targeting Vulkan 1.2+ -- its default
-# target (Vulkan 1.0/SPIR-V 1.0) rejects the extension outright.
-find_package(Vulkan REQUIRED)
-if(NOT Vulkan_GLSLC_EXECUTABLE)
-    message(FATAL_ERROR "glslc not found. Install the Vulkan SDK.")
-endif()
-
-set(SPUDGPUMESHSHADERS_SHADER_OUTDIR "$<TARGET_FILE_DIR:SpudGPUMeshShaders>/shaders")
-
-function(spudgpumeshshaders_compile_shader SHADER)
-    get_filename_component(NAME ${SHADER} NAME)
-    set(SPV "${CMAKE_CURRENT_BINARY_DIR}/${NAME}.spv")
-    add_custom_command(
-            OUTPUT ${SPV}
-            COMMAND ${CMAKE_COMMAND} -E make_directory "${SPUDGPUMESHSHADERS_SHADER_OUTDIR}"
-            COMMAND ${Vulkan_GLSLC_EXECUTABLE} --target-env=vulkan1.2 ${CMAKE_CURRENT_SOURCE_DIR}/${SHADER} -o ${SPV}
-            COMMAND ${CMAKE_COMMAND} -E copy ${SPV} "${SPUDGPUMESHSHADERS_SHADER_OUTDIR}/${NAME}.spv"
-            DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${SHADER}
-    )
-    target_sources(SpudGPUMeshShaders PRIVATE ${SPV})
-endfunction()
-
-spudgpumeshshaders_compile_shader(shaders/mesh.mesh)
-spudgpumeshshaders_compile_shader(shaders/scene.frag)
+# Shaders are Slang, built at build time into the adapter's own format
+# (SPIR-V, DXIL on Windows, a .metallib on Apple platforms) and embedded
+# in the executable -- SpudGPU compiles nothing, see
+# ../../cmake/spudgpusamples_slang.cmake.
+# The mesh shader needs SPIR-V's mesh shading capability (SPV_EXT_mesh_shader)
+# and shader model 6.5 on D3D12.
+spudgpusamples_add_slang_shader(SpudGPUMeshShaders SOURCE shaders/mesh_mesh.slang DXIL_PROFILE ms_6_5
+    SPIRV_CAPABILITIES spvMeshShadingEXT)
+spudgpusamples_add_slang_shader(SpudGPUMeshShaders SOURCE shaders/scene_frag.slang DXIL_PROFILE ps_6_0)
 
 # Dragon_LOD0.bin (the meshlet binary, copied from d3d12samples) is loaded
-# via a plain relative path at runtime, same as the shaders above.
+# via a plain relative path at runtime.
 add_custom_command(TARGET SpudGPUMeshShaders POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/Dragon_LOD0.bin" "$<TARGET_FILE_DIR:SpudGPUMeshShaders>")

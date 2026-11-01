@@ -48,6 +48,10 @@ if(WIN32)
 endif()
 find_package(SDL3 REQUIRED)
 
+# The samples' Slang shader step (spudgpusamples_add_slang_shader), written
+# once for every sample. After spudlib, whose spudgpu_msl tool it runs.
+include(cmake/spudgpusamples_slang.cmake)
+
 add_subdirectory(Samples/HelloTriangle)
 add_subdirectory(Samples/HelloConstBuffers)
 add_subdirectory(Samples/HelloTexture)
@@ -92,3 +96,10 @@ add_subdirectory(Samples/SpudGPUDepthBoundsTest)
 # without Apple silicon) still runs it, with its staging buffer made on its
 # own instead of placed.
 add_subdirectory(Samples/SpudGPUHeaps)
+
+# Ray queries (SPUDGPU_EXT_RAY_QUERY) are implemented on all three backends,
+# so this sample builds everywhere -- no guard needed. Whether a device can
+# trace is SPUDGPU_FEATURE_RAY_QUERY, the sample's own concern at run time
+# (it stops on an adapter without it), not a build-time one -- see
+# spudlib/include/spudgpu.h.
+add_subdirectory(Samples/SpudGPURayTracing)

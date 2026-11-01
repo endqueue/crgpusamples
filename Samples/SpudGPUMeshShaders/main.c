@@ -22,6 +22,11 @@
 #include <corecrt_math_defines.h>
 #endif
 
+// The shaders, Slang built into each format and embedded at build time
+// (../../cmake/spudgpusamples_slang.cmake).
+#include "mesh_mesh.shader.h"
+#include "scene_frag.shader.h"
+
 #define WINDOW_WIDTH 1280
 #define WINDOW_HEIGHT 720
 
@@ -72,9 +77,10 @@ typedef struct FileBufferView {
 	uint32_t size;
 } FileBufferView;
 
-// GPU-side structs -- must match shaders/mesh.mesh's Vertex/Meshlet/Subset
-// layouts exactly (std430 storage-buffer layout: all-uint32/vec3 members,
-// naturally 4-byte-aligned, no manual padding needed).
+// GPU-side structs -- must match the byte offsets shaders/mesh_mesh.slang
+// reads its buffers at and its Meshlet/PushConstants/Globals exactly
+// (all-uint32/float members, naturally 4-byte-aligned, no manual padding
+// needed but Globals' below).
 typedef struct Vertex {
 	float position[3];
 	float normal[3];
@@ -199,6 +205,8 @@ static void mat4_perspective_rh(float fov_y_radians, float aspect, float z_near,
 	float f = 1.0f / tanf(fov_y_radians * 0.5f);
 	memset(out, 0, sizeof(float) * 16);
 	out[0] = f / aspect;
+	// Not negated: SpudGPU's clip space is +Y up on every backend, as the
+	// original's Direct3D one is, so its clockwise front faces hold too.
 	out[5] = f;
 	out[10] = z_far / (z_near - z_far);
 	out[11] = -1.0f;
@@ -291,32 +299,6 @@ static void *read_entire_file(const char *path, size_t *out_size) {
 	fclose(f);
 	*out_size = (size_t) size;
 	return buffer;
-}
-
-// NULL, printed, on failure.
-static spudgpu_shader_module load_shader_module(
-    spudgpu_device device,
-    const char *path,
-    SPUDGPU_SHADER_STAGE stage) {
-	size_t code_size;
-	void *code = read_entire_file(path, &code_size);
-	if (!code)
-		return NULL;
-
-	spudgpu_shader_module_desc desc = {
-	    .base = {SPUD_STRUCT_TYPE_GPU_SHADER_MODULE_DESC, NULL},
-	    .stage      = stage,
-	    .spirv_code = code,
-	    .spirv_size = code_size,
-	};
-	spudgpu_shader_module module = NULL;
-	SPUDRESULT result            = spudgpu_create_shader_module(device, &desc, &module);
-	free(code);
-	if (SPUDFAIL(result)) {
-		fprintf(stderr, "spudgpu_create_shader_module failed for %s: %d\n", path, result);
-		return NULL;
-	}
-	return module;
 }
 
 // Creates a storage buffer in DEVICE memory and uploads [data, data+size)
@@ -464,6 +446,9 @@ int main(int argc, char **argv) {
 
 	SPUDGPU_ADAPTER_PROPERTIES adapter_properties = {.base = {SPUD_STRUCT_TYPE_GPU_ADAPTER_PROPERTIES, NULL}};
 	spudgpu_get_adapter_properties(adapter, &adapter_properties);
+	// The one shader format the adapter takes: each module below is made
+	// from the embedded code in it.
+	const SPUDGPU_SHADER_FORMAT shader_format = spudgpusamples_shader_format(adapter_properties.shader_formats);
 	printf("Using device: %s\n", adapter_properties.description);
 
 	if (!(adapter_properties.supported_features & SPUDGPU_FEATURE_MESH_SHADING)) {
@@ -669,8 +654,8 @@ int main(int argc, char **argv) {
 	// Mesh-shader pipeline + depth buffer.
 	// ------------------------------------------------------------------
 
-	mesh_module     = load_shader_module(device, "shaders/mesh.mesh.spv", SPUDGPU_SHADER_STAGE_MESH);
-	fragment_module = load_shader_module(device, "shaders/scene.frag.spv", SPUDGPU_SHADER_STAGE_FRAGMENT);
+	mesh_module     = spudgpusamples_create_shader_module(device, shader_format, &mesh_mesh_shader, SPUDGPU_SHADER_STAGE_MESH, 128, 1, 1);
+	fragment_module = spudgpusamples_create_shader_module(device, shader_format, &scene_frag_shader, SPUDGPU_SHADER_STAGE_FRAGMENT, 0, 0, 0);
 	if (!mesh_module || !fragment_module)
 		goto cleanup;
 
