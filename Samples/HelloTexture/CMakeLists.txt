@@ -4,9 +4,9 @@ target_link_libraries(HelloTexture PRIVATE spudlib SDL3::SDL3)
 # Shaders are Slang, built at build time into the adapter's own format
 # (SPIR-V, DXIL on Windows, a .metallib on Apple platforms) and embedded
 # in the executable -- SpudGPU compiles nothing, see
-# ../../cmake/spudgpusamples_slang.cmake.
-spudgpusamples_add_slang_shader(HelloTexture SOURCE shaders/texture_vert.slang DXIL_PROFILE vs_6_0)
-spudgpusamples_add_slang_shader(HelloTexture SOURCE shaders/texture_frag.slang DXIL_PROFILE ps_6_0)
+# ../../cmake/spudgpusamples_shader.cmake.
+spudgpusamples_add_shader(HelloTexture SOURCE shaders/texture_vert.slang DXIL_PROFILE vs_6_0)
+spudgpusamples_add_shader(HelloTexture SOURCE shaders/texture_frag.slang DXIL_PROFILE ps_6_0)
 
 if(WIN32)
     add_custom_command(TARGET HelloTexture POST_BUILD

@@ -1,5 +1,5 @@
 //
-// A sample's shader, as ../cmake/spudgpusamples_slang.cmake builds it from
+// A sample's shader, as ../cmake/spudgpusamples_shader.cmake builds it from
 // the sample's shaders/<stem>.slang: SPIR-V on every platform, DXIL on
 // Windows, a .metallib on Apple platforms, each embedded as a C array. A
 // sample includes <stem>.shader.h, which declares <stem>_shader, and hands

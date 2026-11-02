@@ -29,7 +29,7 @@
 #endif
 
 // The shaders, Slang built into each format and embedded at build time
-// (../../cmake/spudgpusamples_slang.cmake).
+// (../../cmake/spudgpusamples_shader.cmake).
 #include "scene_vert.shader.h"
 #include "scene_frag.shader.h"
 

@@ -38,7 +38,7 @@
 #include <string.h>
 
 // The shaders, Slang built into each format and embedded at build time
-// (../../cmake/spudgpusamples_slang.cmake).
+// (../../cmake/spudgpusamples_shader.cmake).
 #include "rt_hello_comp.shader.h"
 #include "rt_lighting_comp.shader.h"
 #include "rt_procedural_comp.shader.h"

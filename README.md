@@ -397,6 +397,15 @@ HelloTexture, SpudGPUExecuteIndirect, SpudGPUMeshShaders,
 SpudGPUDepthBoundsTest, SpudGPUHeaps) ran 300 frames the same day, exit 0,
 silent.
 
+Later on 2026-11-01 the shaders moved to spudlib's one shader step
+(`spud_add_shader()`, card X18), whose Metal source pads each set to every
+binding the shader declares, and SpudGPU's Metal backend began refusing a
+module whose sets aren't its layouts' (card S27). Every sample that builds
+on Metal ran again on the Mac (Apple M5 Pro, Debug, Metal API and shader
+validation with warnings fatal): 300 frames each, SpudGPURayTracing in all
+three modes, exit 0, no message; the three modes screenshotted, drawn as
+before. Windows and Linux not built with the new step.
+
 See `../spudlib/CLAUDE.md` and `../CLAUDE.md` for the architecture this
 repo sits alongside.
 
@@ -425,14 +434,15 @@ SpudGPU compiles no shader: a module takes code in the one format its
 adapter reports (`SPUDGPU_ADAPTER_PROPERTIES::shader_formats`): SPIR-V on
 Vulkan, DXIL on D3D12, a `.metallib` on Metal. Each sample's shaders are
 Slang (`Samples/<Sample>/shaders/<stem>.slang`, one entry point each, named
-for the file's stem, never `main`), built at build time by
-`cmake/spudgpusamples_slang.cmake`, which follows spudlib's own step for its
-test shaders (`../spudlib/cmake/spud_slang.cmake`):
+for the file's stem, never `main`), built at build time by spudlib's shader
+step (`spud_add_shader()`, `../spudlib/cmake/spud_shaders.cmake`), the one
+step every repository of the workspace uses; `cmake/spudgpusamples_shader.cmake`
+calls it and adds only the samples' `<stem>.shader.h`:
 
 - SPIR-V 1.5 on every platform (`slangc -fvk-use-entrypoint-name
   -matrix-layout-column-major -warnings-as-errors all`, plus the mesh
   shader's `spvMeshShadingEXT` and the ray query shaders'
-  `spvRayQueryKHR`), checked by `spirv-val`.
+  `spvRayQueryKHR`), checked by `spirv-val`, with Slang's reflection.
 - DXIL on Windows: Slang writes HLSL and DXC compiles it
   (`dxc -T <profile> -E <entry> -WX`; `vs_6_0`, `ps_6_0`, `cs_6_0`,
   `ms_6_5` for the mesh shader and `cs_6_5` for the ray query shaders),
@@ -441,16 +451,18 @@ test shaders (`../spudlib/cmake/spud_slang.cmake`):
   (`SpudGPURayTracing`'s `rt_common.slang` and `rt_primitives.slang`),
   named in the call's `DEPENDS`, so that a change to one builds its
   importers again.
-- Metal source by both routes on every platform, kept as build outputs:
-  Slang's own, and SPIR-V through spudlib's `spudgpu_msl` tool (the
-  `spudgpu_msl` target). A shader that neither route takes is marked
-  `NO_METAL` with its reason (`SpudGPUDynamicIndexing`'s bindless fragment
-  shader, a sample that never builds on Metal).
+- Metal source by both routes where a `.metallib` is made (and on Windows
+  and Linux under `SPUD_SHADERS_CHECK_METAL=ON`): Slang's own, and SPIR-V
+  through spudlib's `spudgpu_msl` tool, built for the build machine, each
+  set padded to every binding the shader declares. A shader that neither
+  route takes is marked `NO_METAL` with its reason
+  (`SpudGPUDynamicIndexing`'s bindless fragment shader, a sample that never
+  builds on Metal).
 - On Apple platforms, a `.metallib` from the route the shader names
   (`spudgpu_msl`'s unless `METAL_ROUTE SLANG`, card S21; Metal 3.1).
 
-Each binary is embedded in the executable as a C array
-(`cmake/spudgpusamples_embed.cmake`); a generated `<stem>.shader.h` declares
+Each binary is embedded in the executable as a C array (spudlib's
+`cmake/spud_embed.cmake`); a generated `<stem>.shader.h` declares
 `<stem>_shader` with the entry point and the code in each format the build
 made, and `Samples/spudgpusamples_shader.h` makes a module from it in the
 adapter's format. Nothing is read from disk at run time but the samples'

@@ -14,7 +14,7 @@
 #include <string.h>
 
 // The shaders, Slang built into each format and embedded at build time
-// (../../cmake/spudgpusamples_slang.cmake).
+// (../../cmake/spudgpusamples_shader.cmake).
 #include "triangle_vert.shader.h"
 #include "triangle_frag.shader.h"
 

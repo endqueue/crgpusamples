@@ -48,9 +48,9 @@ if(WIN32)
 endif()
 find_package(SDL3 REQUIRED)
 
-# The samples' Slang shader step (spudgpusamples_add_slang_shader), written
-# once for every sample. After spudlib, whose spudgpu_msl tool it runs.
-include(cmake/spudgpusamples_slang.cmake)
+# The samples' shaders (spudgpusamples_add_shader), over spudlib's shader
+# step, which spudlib's build names. After spudlib.
+include(cmake/spudgpusamples_shader.cmake)
 
 add_subdirectory(Samples/HelloTriangle)
 add_subdirectory(Samples/HelloConstBuffers)

@@ -45,7 +45,7 @@
 #include <string.h>
 
 // The shaders, Slang built into each format and embedded at build time
-// (../../cmake/spudgpusamples_slang.cmake).
+// (../../cmake/spudgpusamples_shader.cmake).
 #include "heaps_vert.shader.h"
 #include "heaps_frag.shader.h"
 

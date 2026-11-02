@@ -38,7 +38,7 @@
 #include <string.h>
 
 // The shaders, Slang built into each format and embedded at build time
-// (../../cmake/spudgpusamples_slang.cmake).
+// (../../cmake/spudgpusamples_shader.cmake).
 #include "texture_vert.shader.h"
 #include "texture_frag.shader.h"
 
