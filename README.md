@@ -724,3 +724,59 @@ by eye with the original's `Screenshot.png`:
 Not run on Metal (written for it: the Metal sources of every shader are
 build outputs here, and the 72-byte instance writer is chosen by the
 layout's kind, but nothing was compiled for Apple); Linux not built.
+
+## Linux run, 2026-11-04
+
+Every sample built (Debug, `linux-vulkan`, no warning) and ran on the
+ThinkPad P1 Gen 5 under Fedora 44, KDE Plasma 6.6.4 on Wayland, with the
+Vulkan SDK 1.4.363.1, on all three of its adapters: the Intel Iris Xe
+(Mesa ANV 26.0.3, `--device 0`), the NVIDIA RTX A2000 8GB Laptop (the
+in-kernel `nouveau` driver with Mesa's NVK 26.0.3, `--device 1`) and
+llvmpipe (Mesa 26.0.3 on LLVM 22.1.1, `--device 2`). Every run was
+`--frames 300` from the executable's own directory, under the validation
+layer with errors, warnings and performance warnings reported
+(`VK_LAYER_REPORT_FLAGS=error,warn,perf`), then with synchronization
+validation (`VK_LAYER_VALIDATE_SYNC=1`), then with GPU-assisted
+validation too (`VK_LAYER_GPUAV_ENABLE=1`); the ray tracing sample in each
+of its three modes. This is the first Linux run on an NVIDIA GPU.
+
+| Adapter | Result, in all three modes |
+|---|---|
+| RTX A2000 (NVK) | HelloTriangle, HelloConstBuffers, HelloTexture, Bundles, DepthBoundsTest, DynamicIndexing, ExecuteIndirect and Heaps: 300 frames, exit 0, no message but GPU-AV's notices of its own settings, nothing in the kernel log. MeshShaders and RayTracing refused as they should, exit 1: NVK 26.0.3 offers neither mesh shading nor ray queries on this GPU (NVIDIA's driver does, on Windows) |
+| Iris Xe | the same, the same refusals |
+| llvmpipe | the first six and Heaps as above; ExecuteIndirect and the three ray tracing modes segfault and MeshShaders aborts, each inside LLVM while llvmpipe compiles a shader (`InstCombine`'s `simplifyMaskedScatter`; `Cannot select ... X86ISD::MGATHER`), validation silent: llvmpipe's, taken up in `../DECISIONS.md` card S36 (llvmpipe reports ray queries here) |
+
+**No hang.** The user saw these samples freeze on the NVIDIA card on an
+earlier Fedora install (not recorded). Nothing froze in any of the 108
+runs, every one of them under a time limit with a thread dump and the
+kernel log ready for a hang. Not run: a sample left running unlimited, and
+a resize (the samples' windows are fixed-size). SDL3 made native Wayland
+windows; `SPUDGPU_LINUX_WSI` (`Xlib` in the preset) doesn't apply, SDL
+making the surface.
+
+The same day under the sanitizers (`../prompts/fedora_linux_sanitizers.md`;
+Debug, `build-linux-vulkan-asan` and `-tsan` on the `linux-vulkan` preset
+with spudlib's `sanitize-asan`/`-tsan` flags, the validation layer on):
+every sample `--frames 300` on the Iris Xe and the A2000 under each, the
+ray tracing sample in its three modes. One report was ours:
+SpudGPUDynamicIndexing's BC1 decoder shifted a byte promoted to `int` left
+by 24 (UBSan), widened first now, then clean on both. The rest are
+third-party (`../DECISIONS.md` card S37): NVK leaks 64 bytes per device
+(every sample on the A2000); ANV leaks an internal kernel it loads from
+Mesa's disk cache in `vkCmdDrawIndirect` (ExecuteIndirect on the Iris Xe,
+gone with `MESA_SHADER_CACHE_DISABLE=true`); under TSan the validation
+layer's queue thread races its own `DestroyFence` at shutdown (every
+windowed sample, after `spudgpu_queue_wait_idle`; gone with the layer off),
+and with the layer off libdbus, loaded by SDL3, reports a lock-order
+inversion of its own at exit. MeshShaders and RayTracing refused as before.
+
+
+Screenshots: HelloTriangle, HelloTexture and DynamicIndexing were seen
+the right way up on the A2000, and Bundles on both GPUs. Bundles on the
+A2000 drew the city with triangles missing, specks in the sky and, in one
+capture, a flat green triangle over half the window; the Iris Xe's frame
+had none of it. Validation was silent there too: the same NVK fault as
+card S36's (`../DECISIONS.md`). **The upside-down comparison of every
+sample wasn't finished:** capturing each sample's window needed it
+focused, and KWin didn't focus most of them in time (the samples open
+fixed-size windows behind the active one).

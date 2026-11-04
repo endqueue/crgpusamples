@@ -172,7 +172,8 @@ static void bc1_unpack_565(uint16_t c, uint8_t rgb[3]) {
 static void bc1_decode_block(const uint8_t *block, uint32_t x0, uint32_t y0, uint32_t width, uint32_t height, uint8_t *out_rgba) {
 	uint16_t c0 = (uint16_t)(block[0] | (block[1] << 8));
 	uint16_t c1 = (uint16_t)(block[2] | (block[3] << 8));
-	uint32_t indices = (uint32_t)(block[4] | (block[5] << 8) | (block[6] << 16) | (block[7] << 24));
+	// Widened before shifting: a byte promotes to int, and 255 << 24 overflows it.
+	uint32_t indices = (uint32_t)block[4] | ((uint32_t)block[5] << 8) | ((uint32_t)block[6] << 16) | ((uint32_t)block[7] << 24);
 
 	uint8_t colors[4][3];
 	bc1_unpack_565(c0, colors[0]);
