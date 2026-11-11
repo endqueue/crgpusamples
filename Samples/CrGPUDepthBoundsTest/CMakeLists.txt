@@ -6,7 +6,7 @@ target_link_libraries(CrGPUDepthBoundsTest PRIVATE carrottus SDL3::SDL3)
 # in the executable -- CrGPU compiles nothing, see
 # ../../cmake/crgpusamples_shader.cmake.
 # This sample builds on all three backends (see
-# spudgpusamples/CMakeLists.txt) -- whether crgpu_command_list_set_depth_bounds
+# crgpusamples/CMakeLists.txt) -- whether crgpu_command_list_set_depth_bounds
 # actually does anything on a given Metal device depends on
 # crgpu_depth_bounds_capabilities::supported at runtime (gated to
 # MTLGPUFamilyApple10, macOS/iOS 26+), not on GRAPHICS_BACKEND.

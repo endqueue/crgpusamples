@@ -121,7 +121,7 @@ sample); the one real gap this port closed was **Carrottus GPU had no sampler
 object on any backend** — now added (`crgpu_sampler_create`). Bindless is
 `0` on Metal (needs a `MTLHeap`-backed allocator Carrottus GPU doesn't have yet —
 see `carrottus/CLAUDE.md`), so this sample only builds against Vulkan/D3D12;
-`spudgpusamples/CMakeLists.txt` skips it entirely when
+`crgpusamples/CMakeLists.txt` skips it entirely when
 `GRAPHICS_BACKEND=Metal`. One deliberate simplification: the original's
 diffuse texture is `BC1_UNORM` (block-compressed); this port decodes it to
 plain `R8G8B8A8_UNORM` on the CPU at load time rather than exercising

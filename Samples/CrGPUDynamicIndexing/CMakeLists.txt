@@ -6,7 +6,7 @@ target_link_libraries(CrGPUDynamicIndexing PRIVATE carrottus SDL3::SDL3)
 # in the executable -- CrGPU compiles nothing, see
 # ../../cmake/crgpusamples_shader.cmake.
 # This sample only ever builds against Vulkan/D3D12 (see
-# spudgpusamples/CMakeLists.txt's GRAPHICS_BACKEND guard -- bindless
+# crgpusamples/CMakeLists.txt's GRAPHICS_BACKEND guard -- bindless
 # descriptor indexing isn't implemented on Metal yet).
 crgpusamples_add_shader(CrGPUDynamicIndexing SOURCE shaders/scene_vert.slang DXIL_PROFILE vs_6_0)
 crgpusamples_add_shader(CrGPUDynamicIndexing SOURCE shaders/scene_frag.slang DXIL_PROFILE ps_6_0

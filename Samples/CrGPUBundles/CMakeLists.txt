@@ -6,7 +6,7 @@ target_link_libraries(CrGPUBundles PRIVATE carrottus SDL3::SDL3)
 # in the executable -- CrGPU compiles nothing, see
 # ../../cmake/crgpusamples_shader.cmake.
 # This sample only ever builds against Vulkan/D3D12 (see
-# spudgpusamples/CMakeLists.txt's GRAPHICS_BACKEND guard -- Metal has no
+# crgpusamples/CMakeLists.txt's GRAPHICS_BACKEND guard -- Metal has no
 # CPU-side reusable secondary-command/bundle mechanism, see carrottus/
 # CLAUDE.md's CRGPU_EXT_BUNDLES section).
 crgpusamples_add_shader(CrGPUBundles SOURCE shaders/scene_vert.slang DXIL_PROFILE vs_6_0)

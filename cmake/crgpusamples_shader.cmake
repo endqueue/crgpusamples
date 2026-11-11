@@ -17,7 +17,7 @@ include_guard(GLOBAL)
 
 set(CRGPUSAMPLES_DIR ${CMAKE_CURRENT_LIST_DIR}/..)
 if(NOT CR_SHADERS_CMAKE)
-    message(FATAL_ERROR "spudgpusamples shaders: carrottus's build names no shader step (CR_SHADERS_CMAKE)")
+    message(FATAL_ERROR "crgpusamples shaders: carrottus's build names no shader step (CR_SHADERS_CMAKE)")
 endif()
 include(${CR_SHADERS_CMAKE})
 
