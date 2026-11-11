@@ -4,7 +4,7 @@ struct FragmentInput {
 
 // Separate texture + sampler (not a combined Sampler2D) -- the split
 // SAMPLED_IMAGE + SAMPLER pair this port binds, the idiom
-// SpudGPUDynamicIndexing's bindless design established (see
+// CrGPUDynamicIndexing's bindless design established (see
 // ../../../README.md).
 [[vk::binding(0, 0)]] Texture2D<float4> tex : register(t0, space0);
 [[vk::binding(1, 0)]] SamplerState samp : register(s1, space0);

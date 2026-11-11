@@ -27,12 +27,12 @@
             "cwd": "${command:cmake.launchTargetDirectory}"
         },
         {
-            "name": "Debug SpudGPUDepthBoundsTest (macOS)",
+            "name": "Debug CrGPUDepthBoundsTest (macOS)",
             "type": "lldb",
             "request": "launch",
-            "program": "${workspaceFolder}/build-macos-metal/Samples/SpudGPUDepthBoundsTest/SpudGPUDepthBoundsTest",
+            "program": "${workspaceFolder}/build-macos-metal/Samples/CrGPUDepthBoundsTest/CrGPUDepthBoundsTest",
             "args": [],
-            "cwd": "${workspaceFolder}/build-macos-metal/Samples/SpudGPUDepthBoundsTest"
+            "cwd": "${workspaceFolder}/build-macos-metal/Samples/CrGPUDepthBoundsTest"
         }
     ]
 }

@@ -1,16 +1,16 @@
-# SpudGPU Samples
+# Carrottus GPU Samples
 
 Ports of the [`microsoft/DirectX-Graphics-Samples`](https://github.com/microsoft/DirectX-Graphics-Samples)
-(cloned alongside this repo as `../d3d12samples`) rebuilt against **SpudGPU**
-(`spudlib`'s GPU HAL module) instead of raw D3D12/DXGI. Each sample under
+(cloned alongside this repo as `../d3d12samples`) rebuilt against **Carrottus GPU**
+(`carrottus`'s GPU HAL module) instead of raw D3D12/DXGI. Each sample under
 `Samples/` mirrors one sample from `d3d12samples/Samples/Desktop/` as closely
 as its feature set allows, replacing every `ID3D12*`/DXGI call with the
-equivalent `spudgpu_*` call.
+equivalent `crgpu_*` call.
 
-The point isn't a demo reel — it's a maturity test for SpudLib. Every sample
-that ports cleanly validates a slice of SpudGPU's API; every sample that
+The point isn't a demo reel — it's a maturity test for Carrottus. Every sample
+that ports cleanly validates a slice of Carrottus GPU's API; every sample that
 *can't* port as written (no ray tracing pipeline, no VRS, no cross-adapter
-API as of this writing) is a concrete, prioritized gap to close in `spudlib` itself — not a
+API as of this writing) is a concrete, prioritized gap to close in `carrottus` itself — not a
 workaround to invent here.
 
 ## Status
@@ -20,20 +20,20 @@ workaround to invent here.
 | HelloTriangle | `D3D12HelloWorld/HelloTriangle` | Ported |
 | HelloConstBuffers | `D3D12HelloWorld/HelloConstBuffers` | Ported |
 | HelloTexture | `D3D12HelloWorld/HelloTexture` | Ported, all backends (see note below) |
-| SpudGPUExecuteIndirect | `D3D12ExecuteIndirect` | Ported (see note below) |
-| SpudGPUDynamicIndexing | `D3D12DynamicIndexing` | Ported, Vulkan/D3D12 only (see note below) |
-| SpudGPUMeshShaders | `D3D12MeshShaders/MeshletRender` | Ported, all backends (see note below) |
-| SpudGPUBundles | `D3D12Bundles` | Ported, Vulkan/D3D12 only (see note below) |
-| SpudGPUDepthBoundsTest | `D3D12DepthBoundsTest` | Ported, all backends (see note below) |
-| SpudGPUHeaps | `D3D12SmallResources` | Ported, all backends; run on D3D12, Vulkan and Metal (see note below) |
-| SpudGPURayTracing | `D3D12Raytracing`: `D3D12RaytracingHelloWorld`, `D3D12RaytracingSimpleLighting`, `D3D12RaytracingProceduralGeometry` | Ported with inline ray queries in place of ray tracing pipelines, all backends; run on D3D12, Vulkan and Metal (see note below) |
+| CrGPUExecuteIndirect | `D3D12ExecuteIndirect` | Ported (see note below) |
+| CrGPUDynamicIndexing | `D3D12DynamicIndexing` | Ported, Vulkan/D3D12 only (see note below) |
+| CrGPUMeshShaders | `D3D12MeshShaders/MeshletRender` | Ported, all backends (see note below) |
+| CrGPUBundles | `D3D12Bundles` | Ported, Vulkan/D3D12 only (see note below) |
+| CrGPUDepthBoundsTest | `D3D12DepthBoundsTest` | Ported, all backends (see note below) |
+| CrGPUHeaps | `D3D12SmallResources` | Ported, all backends; run on D3D12, Vulkan and Metal (see note below) |
+| CrGPURayTracing | `D3D12Raytracing`: `D3D12RaytracingHelloWorld`, `D3D12RaytracingSimpleLighting`, `D3D12RaytracingProceduralGeometry` | Ported with inline ray queries in place of ray tracing pipelines, all backends; run on D3D12, Vulkan and Metal (see note below) |
 
 `HelloTexture` closed a real gap and worked around another. The gap it
-closed: `spudgpu_cmd_copy_buffer_to_image`/`_copy_image_to_buffer` and
-`spudgpu_get_image_buffer_copy_size` were unimplemented placeholders on
-Metal — `spudgpumetalrenderpass.m`'s file comment already flagged its
+closed: `crgpu_command_list_copy_buffer_to_image`/`_copy_image_to_buffer` and
+`crgpu_image_get_buffer_copy_size` were unimplemented placeholders on
+Metal — `crgpumetalrenderpass.m`'s file comment already flagged its
 copy/blit functions as such, "no caller needs them yet" (see
-`SpudGPUMeshShaders` above, whose buffer-to-buffer copy hit the same
+`CrGPUMeshShaders` above, whose buffer-to-buffer copy hit the same
 placeholder). This sample's texture upload was the first caller to actually
 need buffer-to-image, and it silently produced a solid-black texture until
 these were implemented for real via `MTLBlitCommandEncoder`
@@ -44,31 +44,31 @@ pattern) since Metal disallows two live encoders of different kinds on one
 command buffer at once.
 
 The gap this port works around instead of closing:
-`SPUDGPU_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER` — declared in `spudgpu.h` and
+`CRGPU_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER` — declared in `crgpu.h` and
 implemented on Vulkan/D3D12 since the type was added — doesn't actually work
-on Metal. `spudgpumetaldescriptors.m` already documented that a combined
+on Metal. `crgpumetaldescriptors.m` already documented that a combined
 descriptor's paired sampler is "intentionally not written" there, and
-cross-compiling a GLSL `sampler2D` confirms why: under SpudGPU's
+cross-compiling a GLSL `sampler2D` confirms why: under Carrottus GPU's
 per-descriptor-set-argument-buffer scheme, SPIRV-Cross's synthesized sampler
 member overlaps the texture's own binding slot, which it only permits via
 "full mutable aliasing" on Metal 3+ (`spirv_msl.cpp`). This port doesn't fix
-that gap — it works around it the same way `SpudGPUDynamicIndexing`'s
+that gap — it works around it the same way `CrGPUDynamicIndexing`'s
 bindless design already had to: a `texture2D` at one binding and a plain
-`sampler` at the next, written as separate `SPUDGPU_DESCRIPTOR_TYPE_SAMPLED_
-IMAGE`/`SPUDGPU_DESCRIPTOR_TYPE_SAMPLER` descriptors instead of one combined
+`sampler` at the next, written as separate `CRGPU_DESCRIPTOR_TYPE_SAMPLED_
+IMAGE`/`CRGPU_DESCRIPTOR_TYPE_SAMPLER` descriptors instead of one combined
 one. This is the first sample to exercise that split-descriptor idiom outside
 bindless, and the first to exercise ordinary (non-bindless) texture sampling
 on Metal at all. Two smaller, harmless deviations alongside it: a real
-dynamic `spudgpu_sampler` stands in for the original's static/immutable
-root-signature sampler (`spudgpu_sampler_desc` has no such mechanism yet —
-see `spudlib/CLAUDE.md`'s "Known gaps"), and `CLAMP_TO_EDGE` addressing
+dynamic `crgpu_sampler` stands in for the original's static/immutable
+root-signature sampler (`crgpu_sampler_desc` has no such mechanism yet —
+see `carrottus/CLAUDE.md`'s "Known gaps"), and `CLAMP_TO_EDGE` addressing
 replaces the original's `CLAMP_TO_BORDER` with a transparent-black border
-(`spudgpu_sampler_desc` has no border-color field) — this sample's UVs never
+(`crgpu_sampler_desc` has no border-color field) — this sample's UVs never
 leave `[0, 1]`, so the two modes look identical here regardless.
 
-`SpudGPUExecuteIndirect` closed a real gap: `spudgpu` had no compute-dispatch
+`CrGPUExecuteIndirect` closed a real gap: `crgpu` had no compute-dispatch
 call at all, and no buffer pipeline barriers on any backend, both now added
-alongside `spudgpu_cmd_draw_indirect`/`_indexed_indirect`. The port deviates
+alongside `crgpu_command_list_draw_indirect`/`_indexed_indirect`. The port deviates
 from the original in one deliberate, documented way, and initially shipped a
 second deviation that turned out to be a genuine D3D12 portability bug rather
 than a valid simplification (see below):
@@ -82,7 +82,7 @@ than a valid simplification (see below):
   different object encoded via its own API. This port's compute pass instead
   writes one draw-args entry per triangle at a fixed index (zeroed
   `vertex_count` for a culled triangle), and the renderer always issues a
-  single fixed-count `spudgpu_cmd_draw_indirect` — fully portable, same
+  single fixed-count `crgpu_command_list_draw_indirect` — fully portable, same
   demonstrated mechanism (a compute pass decides per-triangle what gets
   drawn), just without the bandwidth-compaction optimization.
 - **No per-draw root CBV update, and no `gl_InstanceIndex` either.** The
@@ -100,60 +100,60 @@ than a valid simplification (see below):
   per-draw root-constant-update argument — exactly the D3D12-only mechanism
   this port was trying to avoid). The actual portable substitute: `scene`'s
   per-triangle offset/color is bound as a second, **per-instance vertex
-  buffer** (`per_instance = true` on its `spudgpu_vertex_binding_desc`)
+  buffer** (`per_instance = true` on its `crgpu_vertex_binding_desc`)
   instead of a storage/uniform buffer indexed by instance ID. The
   fixed-function input assembler's per-instance vertex fetch *does* correctly
   offset by `StartInstanceLocation` on every backend — this is a separate
   mechanism from the `SV_InstanceID`/`gl_InstanceIndex` system value, and is
   the standard, actually-portable technique for per-instance data. A
   `first_instance` other than 0 in an indirect draw's arguments needs a
-  device created with `SPUDGPU_FEATURE_DRAW_INDIRECT_FIRST_INSTANCE`
+  device created with `CRGPU_FEATURE_DRAW_INDIRECT_FIRST_INSTANCE`
   (Vulkan's `drawIndirectFirstInstance`; every D3D12 and Metal adapter), so
   the sample asks for it and stops on an adapter without it.
 
-`SpudGPUDynamicIndexing` exercises `spudgpu`'s bindless descriptor indexing
-feature for the first time (`spudgpu_bindless_register_sampled_image`,
-`spudgpu_cmd_bind_bindless_resources`, ...) — a 15x8 grid of building meshes,
+`CrGPUDynamicIndexing` exercises `crgpu`'s bindless descriptor indexing
+feature for the first time (`crgpu_bindless_register_sampled_image`,
+`crgpu_command_list_bind_graphics_bindless_resources`, ...) — a 15x8 grid of building meshes,
 each dynamically indexing into one shared unbounded texture table for its own
 procedurally-generated material color. That feature was already fully
 implemented on Vulkan/D3D12 before this port (just never exercised by a
-sample); the one real gap this port closed was **SpudGPU had no sampler
-object on any backend** — now added (`spudgpu_create_sampler`). Bindless is
-`0` on Metal (needs a `MTLHeap`-backed allocator SpudGPU doesn't have yet —
-see `spudlib/CLAUDE.md`), so this sample only builds against Vulkan/D3D12;
+sample); the one real gap this port closed was **Carrottus GPU had no sampler
+object on any backend** — now added (`crgpu_sampler_create`). Bindless is
+`0` on Metal (needs a `MTLHeap`-backed allocator Carrottus GPU doesn't have yet —
+see `carrottus/CLAUDE.md`), so this sample only builds against Vulkan/D3D12;
 `spudgpusamples/CMakeLists.txt` skips it entirely when
 `GRAPHICS_BACKEND=Metal`. One deliberate simplification: the original's
 diffuse texture is `BC1_UNORM` (block-compressed); this port decodes it to
 plain `R8G8B8A8_UNORM` on the CPU at load time rather than exercising
-`spudgpu`'s (real, but never-yet-uploaded-to) BC1 format support, to avoid
+`crgpu`'s (real, but never-yet-uploaded-to) BC1 format support, to avoid
 stacking an unverified compressed-texture-upload path on top of bindless
 textures, a real sampler, and a real depth buffer all being exercised for
 the first time in one sample.
 
-`SpudGPUMeshShaders` closed the biggest remaining gap this suite tracked:
-`spudgpu` had no mesh-shader pipeline at all (mesh shaders replace
+`CrGPUMeshShaders` closed the biggest remaining gap this suite tracked:
+`crgpu` had no mesh-shader pipeline at all (mesh shaders replace
 vertex-fetch/input-assembly entirely with a shader stage that emits meshlet
 geometry directly) — now added on **all three** backends (`VK_EXT_mesh_shader`
 on Vulkan, a hand-rolled `D3D12_PIPELINE_STATE_STREAM_DESC` on D3D12 since the
 vendored `d3dx12.h` predates Microsoft's own mesh-PSO helpers, and
 `MTLMeshRenderPipelineDescriptor` on Metal), gated behind the new
-`SPUDGPU_EXT_MESH_SHADING` — see `spudlib/CLAUDE.md` for why this `EXT` is a
+`CRGPU_EXT_MESH_SHADING` — see `carrottus/CLAUDE.md` for why this `EXT` is a
 different flavor from bindless's (the macro is `1` everywhere; it's *runtime*
 driver/hardware support that varies, surfaced via
-`spudgpu_get_mesh_shading_capabilities`). The sample renders the real
+`crgpu_get_mesh_shading_capabilities`). The sample renders the real
 `Dragon_LOD0.bin` meshlet asset shipped with the original D3D12 sample,
 one Slang mesh shader built for all three backends exactly like every other
 sample's shaders (see Building below). This sample's four
-meshlet data buffers need `SPUDGPU_BUFFER_USAGE_STORAGE`, which
-`SPUDGPU_MEMORY_KIND_UPLOAD` refuses on every backend — the rule comes from
+meshlet data buffers need `CRGPU_BUFFER_USAGE_STORAGE`, which
+`CRGPU_MEMORY_KIND_UPLOAD` refuses on every backend — the rule comes from
 D3D12, where an UPLOAD-heap resource can't carry
-`D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS`, and SpudGPU holds every
+`D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS`, and Carrottus GPU holds every
 backend to it (the mappable kind that does take `STORAGE`,
-`SPUDGPU_MEMORY_KIND_DEVICE_MAPPABLE`, exists only on some devices).
-Getting this sample running on D3D12 closed a real gap in `spudgpu` itself:
-**`spudgpu_cmd_copy_buffer` (buffer-to-buffer copy) didn't exist on any
+`CRGPU_MEMORY_KIND_DEVICE_MAPPABLE`, exists only on some devices).
+Getting this sample running on D3D12 closed a real gap in `crgpu` itself:
+**`crgpu_command_list_copy_buffer` (buffer-to-buffer copy) didn't exist on any
 backend**, so the textbook fix — stage the CPU data through a small
-`TRANSFER_SRC` buffer, then copy into a real `SPUDGPU_MEMORY_KIND_DEVICE` buffer — wasn't
+`TRANSFER_SRC` buffer, then copy into a real `CRGPU_MEMORY_KIND_DEVICE` buffer — wasn't
 available. Now added (`vkCmdCopyBuffer` / `CopyBufferRegion`; Metal's
 `MTLBlitCommandEncoder` copy was initially left as an unimplemented
 placeholder like this file's other blit functions, unverified without Apple
@@ -163,14 +163,14 @@ plus a `COMMON` →
 `UNORDERED_ACCESS` pipeline barrier (needed only on D3D12 in practice — that
 transition isn't one of the states D3D12 promotes to implicitly the way it
 does `COPY_DEST`/read-only states, but costs nothing on Vulkan given the
-`spudgpu_queue_wait_idle` already between the copy and first use).
+`crgpu_command_queue_wait_idle` already between the copy and first use).
 
-`SpudGPUBundles` closed the last real gap `SPUDGPU_COMMAND_LIST_TYPE_BUNDLE`
+`CrGPUBundles` closed the last real gap `CRGPU_COMMAND_LIST_TYPE_BUNDLE`
 had been sitting on since it was added to the base command-list-type enum:
 the type existed and D3D12's allocator/list creation already honored it, but
 nothing could actually *execute* a bundle once recorded. Now added, gated
-behind the new `SPUDGPU_EXT_BUNDLES` (`spudgpu_begin_bundle_command_list`,
-`spudgpu_cmd_execute_bundle`) — `1` on Vulkan/D3D12, `0` on Metal, the same
+behind the new `CRGPU_EXT_BUNDLES` (`crgpu_command_list_begin_bundle`,
+`crgpu_command_list_execute_bundle`) — `1` on Vulkan/D3D12, `0` on Metal, the same
 flavor of `EXT` as bindless (a structural capability gap, not a runtime
 driver check): Metal's `MTLCommandBuffer`/`MTLRenderCommandEncoder` are
 single-use, so there's no CPU-side reusable secondary-command mechanism to
@@ -179,17 +179,17 @@ native case (`ID3D12GraphicsCommandList::ExecuteBundle`); Vulkan's bundle is
 a `VK_COMMAND_BUFFER_LEVEL_SECONDARY` buffer replayed via
 `vkCmdExecuteCommands`, which — since this codebase is dynamic-rendering-only
 (no `VkRenderPass`) — needed `VkCommandBufferInheritanceRenderingInfo` wired
-through a new `spudgpu_begin_bundle_command_list`/`spudgpu_bundle_inheritance_
+through a new `crgpu_command_list_begin_bundle`/`crgpu_bundle_inheritance_
 desc` (the attachment formats a secondary buffer will replay under, since
 there's no framebuffer object to infer them from) plus a new
-`will_execute_bundles` flag on `spudgpu_rendering_begin_desc` so the primary
+`will_execute_bundles` flag on `crgpu_rendering_begin_desc` so the primary
 list's `vkCmdBeginRendering` opens with
 `VK_RENDERING_CONTENTS_SECONDARY_COMMAND_BUFFERS_BIT` only when the caller
-actually intends to execute one — SpudLib never infers that on the caller's
-behalf (see `spudlib/CLAUDE.md`'s zero-policy rule). The sample itself
+actually intends to execute one — Carrottus never infers that on the caller's
+behalf (see `carrottus/CLAUDE.md`'s zero-policy rule). The sample itself
 demonstrates the mechanism the original does: a `CityRowCount x
 CityColumnCount` (10x3) grid of `occcity` buildings (the same asset
-`SpudGPUDynamicIndexing` uses), each with its own per-object CBV, drawn
+`CrGPUDynamicIndexing` uses), each with its own per-object CBV, drawn
 either by replaying one bundle recorded once at startup (default) or by
 re-recording the identical bind+draw sequence into the direct command list
 every frame — press `C` to toggle, matching the original's own keybinding.
@@ -202,50 +202,50 @@ frame, matching every other sample in this suite, rather than the original's
 point at fixed buffer offsets regardless, so this doesn't touch the actual
 mechanism being demonstrated.
 
-`SpudGPUDepthBoundsTest` closed a gap that had sat unaddressed since the very
-first sample: `spudgpu` had no depth bounds test at all — a mechanism, distinct
+`CrGPUDepthBoundsTest` closed a gap that had sat unaddressed since the very
+first sample: `crgpu` had no depth bounds test at all — a mechanism, distinct
 from the ordinary per-fragment depth test, that discards a fragment based on
 whether the depth attachment's *existing* value at that pixel (already
 written by an earlier draw) falls inside a caller-set `[min, max]` window, set
-per-draw via the new `spudgpu_cmd_set_depth_bounds`. Added on Vulkan
+per-draw via the new `crgpu_command_list_set_depth_bounds`. Added on Vulkan
 (`VkPhysicalDeviceFeatures::depthBounds` + `vkCmdSetDepthBounds`, both core
 1.0, no extension), D3D12 (`D3D12_DEPTH_STENCIL_DESC1::
 DepthBoundsTestEnable` + `ID3D12GraphicsCommandList1::OMSetDepthBounds`), and
 Metal (`[MTLRenderCommandEncoder setDepthTestMinBound:maxBound:]`, macOS/iOS
-26+), gated behind the new `SPUDGPU_EXT_DEPTH_BOUNDS_TEST` — `1` on **every**
+26+), gated behind the new `CRGPU_EXT_DEPTH_BOUNDS_TEST` — `1` on **every**
 backend, since unlike bindless/bundles this isn't a structural gap on Metal
 (the primitive genuinely exists there, just very recently added). What does
-vary per-device is runtime hardware support, the `SPUDGPU_EXT_MESH_SHADING`
+vary per-device is runtime hardware support, the `CRGPU_EXT_MESH_SHADING`
 flavor of this pattern rather than the bindless/bundles flavor:
-`spudgpu_depth_bounds_capabilities::supported` reflects
+`crgpu_depth_bounds_capabilities::supported` reflects
 `VkPhysicalDeviceFeatures::depthBounds` (Vulkan),
 `D3D12_FEATURE_DATA_D3D12_OPTIONS2::DepthBoundsTestSupported` (D3D12), or
 `[MTLDevice supportsFamily:MTLGPUFamilyApple10]` (Metal — the newest Apple
 GPU family as of this writing, so expect `false` on most Metal hardware in
 the field today even though the sample still builds and runs there). Metal
 also has no pipeline-level enable toggle at all, unlike Vulkan/D3D12 —
-`spudgpu_shader_pipeline_desc::depth_bounds_test_enable` is ignored there,
-and `spudgpu_cmd_set_depth_bounds` alone both enables and configures the test
+`crgpu_graphics_pipeline_desc::depth_bounds_test_enable` is ignored there,
+and `crgpu_command_list_set_depth_bounds` alone both enables and configures the test
 per draw (passing `(0, 1)` disables it, matching Metal's own default-disabled
 semantics). Adding `DepthBoundsTestEnable` to D3D12's pipeline creation also
 closed a smaller, adjacent gap: that field only exists on
 `D3D12_DEPTH_STENCIL_DESC1`, reachable only through `CreatePipelineState`'s
-PSO-stream path — `spudgpu_create_shader_pipeline`'s classic (non-mesh)
+PSO-stream path — `crgpu_graphics_pipeline_create`'s classic (non-mesh)
 pipeline path was still going through the older `CreateGraphicsPipelineState`/
 `D3D12_GRAPHICS_PIPELINE_STATE_DESC`, so it now builds a
 `CD3DX12_PIPELINE_STATE_STREAM1` from that same desc instead (a lossless,
-purely additive upgrade — see `spudgpud3d12shader.cpp`) rather than
+purely additive upgrade — see `crgpud3d12shader.cpp`) rather than
 maintaining two divergent pipeline-creation paths.
 
 The port itself deviates from the original in one deliberate, documented way:
 **no colorless depth-only priming pass.** The D3D12 original's first draw
 uses a PSO with no pixel shader at all (`DEPTH_ONLY_PSO_STREAM` has no `PS`
 subobject) purely to write real per-vertex depth into the depth buffer without
-touching the render target's color. `spudgpu_create_shader_pipeline` requires
-a fragment module on every pipeline (`SPUDRESULT_GPU_VERTEX_AND_FRAGMENT_
+touching the render target's color. `crgpu_graphics_pipeline_create` requires
+a fragment module on every pipeline (`CR_RESULT_GPU_VERTEX_AND_FRAGMENT_
 SHADER_REQUIRED` otherwise) — lifting that would mean threading an optional
 fragment stage (and, to fully match the original's *visual* result, a
-color-write-mask override neither backend's `spudgpu_blend_attachment_desc`
+color-write-mask override neither backend's `crgpu_blend_attachment_desc`
 exposes yet) through both backends for a single sample's sake. Instead, this
 port's priming pass renders the triangle's real colors and real depth (an
 ordinary opaque draw), and the depth-bounds-tested second pass redraws the
@@ -256,10 +256,10 @@ color already shows through underneath, so the mechanism being demonstrated
 just as clearly, just with a highlight-over-base look rather than
 background-showing-through.
 
-`SpudGPUHeaps` is `D3D12SmallResources` under the name of the SpudGPU
+`CrGPUHeaps` is `D3D12SmallResources` under the name of the Carrottus GPU
 feature it exercises: heaps and the resources placed in them
-(`spudgpu_create_heap`, `spudgpu_get_*_placement_requirements`,
-`spudgpu_create_placed_buffer`/`_image`). The grid of 77 small textures is
+(`crgpu_heap_create`, `crgpu_get_*_placement_requirements`,
+`crgpu_buffer_create_placed`/`_image`). The grid of 77 small textures is
 made either placed, one after another in a single heap, or committed, one
 device allocation each; Space switches between them, as in the original.
 The port goes further than the original in one place and falls short of it
@@ -267,30 +267,30 @@ in two:
 
 - **Buffers are placed too.** The vertex buffer goes in a heap of device
   memory, and the staging buffer that fills it and the textures in a heap of
-  upload memory, where `SPUDGPU_DEVICE_PROPERTIES::mappable_heaps` allows it
+  upload memory, where `CRGPU_DEVICE_PROPERTIES::mappable_heaps` allows it
   (a Mac without Apple silicon can't map a heap; the staging buffer is then
-  made with `spudgpu_create_buffer`).
+  made with `crgpu_buffer_create`).
 - **No memory figure for committed resources.** The original's title shows
-  `QueryVideoMemoryInfo`'s figure for each mode. SpudGPU has no memory
+  `QueryVideoMemoryInfo`'s figure for each mode. Carrottus GPU has no memory
   budget query yet, so the title shows the placed mode's heap size and
   per-texture requirements, and says nothing measured for the committed
   mode.
 - **No small-resource packing on D3D12 yet.** The original exists to show
   `D3D12_SMALL_RESOURCE_PLACEMENT_ALIGNMENT` (4 KiB) letting small textures
-  share 64 KiB pages. SpudGPU's D3D12 backend places every texture at
-  64 KiB for now (see `spudlib/CLAUDE.md`), so on D3D12 the two modes cost
+  share 64 KiB pages. Carrottus GPU's D3D12 backend places every texture at
+  64 KiB for now (see `carrottus/CLAUDE.md`), so on D3D12 the two modes cost
   the same. On Vulkan and Metal the textures pack at whatever alignment the
   driver reports.
 
-The sample was written against SpudGPU's heap calls the day they landed. It
-type-checks against the Vulkan and Metal configurations of `spudgpu.h`
+The sample was written against Carrottus GPU's heap calls the day they landed. It
+type-checks against the Vulkan and Metal configurations of `crgpu.h`
 (its shaders were then GLSL, compiled with glslang). It was first built and run on 2026-10-22,
 on D3D12 and Vulkan on Windows (see the end of this file); it has not run on
 Metal.
 
-`SpudGPURayTracing` is the three tutorials of Microsoft's
+`CrGPURayTracing` is the three tutorials of Microsoft's
 `D3D12Raytracing` (`Samples/Desktop/D3D12Raytracing/src/` in
-`DirectX-Graphics-Samples`, MIT License), written again in SpudGPU's C and
+`DirectX-Graphics-Samples`, MIT License), written again in Carrottus GPU's C and
 in Slang, as one sample with three modes chosen with `--mode`:
 
 - `hello` (`D3D12RaytracingHelloWorld`): the triangle traced in screen
@@ -315,15 +315,15 @@ in Slang, as one sample with three modes chosen with `--mode`:
   procedural candidate runs the same code. The signed distance functions
   are Inigo Quilez's (MIT), as the original credits them.
 
-It asks for `SPUDGPU_FEATURE_RAY_QUERY` and, on an adapter without it,
+It asks for `CRGPU_FEATURE_RAY_QUERY` and, on an adapter without it,
 prints that the device has no ray queries and exits 1, as
-`SpudGPUMeshShaders` does without mesh shading. `SPUDGPU_EXT_RAY_QUERY` is
+`CrGPUMeshShaders` does without mesh shading. `CRGPU_EXT_RAY_QUERY` is
 1 on every backend, so it builds everywhere. The port deviates from the
 originals in these ways:
 
 - **Inline ray queries, not ray tracing pipelines.** The originals are DXR
   1.0: state objects, shader tables, and ray generation, miss,
-  closest-hit and intersection shaders. SpudGPU has no ray tracing
+  closest-hit and intersection shaders. Carrottus GPU has no ray tracing
   pipeline EXT (card S12), so each mode traces with inline ray queries
   (DXR 1.1's form; `SPV_KHR_ray_query`, `RayQuery`, Metal's
   `intersection_query`) in one compute shader,
@@ -356,9 +356,9 @@ originals in these ways:
   each primitive's transform (its scale, a turn about y, a move to its
   AABB's centre: the original's) from per-primitive data.
 - **Instances written both ways (card S14).** Instances are in the
-  device's layout (`spudgpu_get_acceleration_structure_instance_layout()`).
+  device's layout (`crgpu_device_get_acceleration_structure_instance_layout()`).
   The hello and lighting modes write theirs on the CPU with
-  `spudgpu_write_acceleration_structure_instances()` into an upload buffer
+  `crgpu_device_write_acceleration_structure_instances()` into an upload buffer
   the top level reads. The procedural mode writes the plane's that way and
   copies it into a buffer of the device's memory, where the AABBs' is
   written by the sample's own compute shader for the layout's kind
@@ -374,7 +374,7 @@ The acceleration structures are built once, in one setup submission: the
 geometry staged into a buffer of the device's memory, the bottom levels in
 one build call, the top level after a barrier, one scratch buffer with a
 range for each build at the device's scratch alignment, and the barriers
-`spudgpu.h` states (scratch to `ACCELERATION_STRUCTURE_SCRATCH`, inputs to
+`crgpu.h` states (scratch to `ACCELERATION_STRUCTURE_SCRATCH`, inputs to
 `ACCELERATION_STRUCTURE_BUILD_INPUT`, `BUILD_WRITE` to `BUILD_READ`
 between the levels, `BUILD_WRITE` to `TRACE` before the first frame).
 What only that submission used (the staging buffers, the instances, the
@@ -393,29 +393,29 @@ filled a component at a time and an unused candidate transform, so
 `candidate_hit` returns the bottom level's normal, transformed only where
 it is used (the same arithmetic; D3D12 and Vulkan not rerun since).
 Every other sample that builds on Metal (HelloTriangle, HelloConstBuffers,
-HelloTexture, SpudGPUExecuteIndirect, SpudGPUMeshShaders,
-SpudGPUDepthBoundsTest, SpudGPUHeaps) ran 300 frames the same day, exit 0,
+HelloTexture, CrGPUExecuteIndirect, CrGPUMeshShaders,
+CrGPUDepthBoundsTest, CrGPUHeaps) ran 300 frames the same day, exit 0,
 silent.
 
-Later on 2026-11-01 the shaders moved to spudlib's one shader step
-(`spud_add_shader()`, card X18), whose Metal source pads each set to every
-binding the shader declares, and SpudGPU's Metal backend began refusing a
+Later on 2026-11-01 the shaders moved to carrottus's one shader step
+(`cr_add_shader()`, card X18), whose Metal source pads each set to every
+binding the shader declares, and Carrottus GPU's Metal backend began refusing a
 module whose sets aren't its layouts' (card S27). Every sample that builds
 on Metal ran again on the Mac (Apple M5 Pro, Debug, Metal API and shader
-validation with warnings fatal): 300 frames each, SpudGPURayTracing in all
+validation with warnings fatal): 300 frames each, CrGPURayTracing in all
 three modes, exit 0, no message; the three modes screenshotted, drawn as
 before. Windows and Linux not built with the new step.
 
-See `../spudlib/CLAUDE.md` and `../CLAUDE.md` for the architecture this
+See `../carrottus/CLAUDE.md` and `../CLAUDE.md` for the architecture this
 repo sits alongside.
 
 ## Building
 
-Each sample is a standalone executable target linking `spudlib`. Windowing
-and surface creation use SDL3 + `spudgpu_sdl3.h` (the same approach as
+Each sample is a standalone executable target linking `carrottus`. Windowing
+and surface creation use SDL3 + `crgpu_sdl3.h` (the same approach as
 `Erethal_SDL3_ImGui`, which is deprecated), so samples build and run identically on Windows and
 Linux. Pick a graphics backend via the `GRAPHICS_BACKEND` cache variable
-(`Vulkan` or `D3D12`), same as `spudlib` itself.
+(`Vulkan` or `D3D12`), same as `carrottus` itself.
 
 ```
 cmake --preset windows-vulkan   # or windows-d3d12, linux-vulkan, macos-metal
@@ -430,13 +430,13 @@ under the root's build directory instead.
 
 ### Shaders
 
-SpudGPU compiles no shader: a module takes code in the one format its
-adapter reports (`SPUDGPU_ADAPTER_PROPERTIES::shader_formats`): SPIR-V on
+Carrottus GPU compiles no shader: a module takes code in the one format its
+adapter reports (`CRGPU_ADAPTER_PROPERTIES::shader_formats`): SPIR-V on
 Vulkan, DXIL on D3D12, a `.metallib` on Metal. Each sample's shaders are
 Slang (`Samples/<Sample>/shaders/<stem>.slang`, one entry point each, named
-for the file's stem, never `main`), built at build time by spudlib's shader
-step (`spud_add_shader()`, `../spudlib/cmake/spud_shaders.cmake`), the one
-step every repository of the workspace uses; `cmake/spudgpusamples_shader.cmake`
+for the file's stem, never `main`), built at build time by carrottus's shader
+step (`cr_add_shader()`, `../carrottus/cmake/cr_shaders.cmake`), the one
+step every repository of the workspace uses; `cmake/crgpusamples_shader.cmake`
 calls it and adds only the samples' `<stem>.shader.h`:
 
 - SPIR-V 1.5 on every platform (`slangc -fvk-use-entrypoint-name
@@ -448,37 +448,37 @@ calls it and adds only the samples' `<stem>.shader.h`:
   `ms_6_5` for the mesh shader and `cs_6_5` for the ray query shaders),
   its validator signing what it passes.
 - Shared code is a Slang module a shader imports from beside it
-  (`SpudGPURayTracing`'s `rt_common.slang` and `rt_primitives.slang`),
+  (`CrGPURayTracing`'s `rt_common.slang` and `rt_primitives.slang`),
   named in the call's `DEPENDS`, so that a change to one builds its
   importers again.
 - Metal source by both routes where a `.metallib` is made (and on Windows
-  and Linux under `SPUD_SHADERS_CHECK_METAL=ON`): Slang's own, and SPIR-V
-  through spudlib's `spudgpu_msl` tool, built for the build machine, each
+  and Linux under `CR_SHADERS_CHECK_METAL=ON`): Slang's own, and SPIR-V
+  through carrottus's `crgpu_msl` tool, built for the build machine, each
   set padded to every binding the shader declares. A shader that neither
   route takes is marked `NO_METAL` with its reason
-  (`SpudGPUDynamicIndexing`'s bindless fragment shader, a sample that never
+  (`CrGPUDynamicIndexing`'s bindless fragment shader, a sample that never
   builds on Metal).
 - On Apple platforms, a `.metallib` from the route the shader names
-  (`spudgpu_msl`'s unless `METAL_ROUTE SLANG`, card S21; Metal 3.1).
+  (`crgpu_msl`'s unless `METAL_ROUTE SLANG`, card S21; Metal 3.1).
 
-Each binary is embedded in the executable as a C array (spudlib's
-`cmake/spud_embed.cmake`); a generated `<stem>.shader.h` declares
+Each binary is embedded in the executable as a C array (carrottus's
+`cmake/cr_embed.cmake`); a generated `<stem>.shader.h` declares
 `<stem>_shader` with the entry point and the code in each format the build
-made, and `Samples/spudgpusamples_shader.h` makes a module from it in the
+made, and `Samples/crgpusamples_shader.h` makes a module from it in the
 adapter's format. Nothing is read from disk at run time but the samples'
 `.bin` assets. `slangc`, `spirv-val` and `dxc` come from the Vulkan SDK
 (`VULKAN_SDK`); their versions are printed at configure time.
 
-SpudGPU's clip space is +Y up on every backend, as Direct3D's is, so the
+Carrottus GPU's clip space is +Y up on every backend, as Direct3D's is, so the
 samples use the originals' clip-space vertices and projections unflipped.
 
 On Apple Silicon, samples also build and run against `GRAPHICS_BACKEND=Metal`
-(see `spudlib/CLAUDE.md`) — except `SpudGPUDynamicIndexing`, which needs
-bindless descriptor indexing, and `SpudGPUBundles`, which needs
-`SPUDGPU_EXT_BUNDLES`; neither is buildable on Metal (see above).
-`SpudGPUDepthBoundsTest` *does* build and run on Metal — its
-`SPUDGPU_EXT_DEPTH_BOUNDS_TEST` gap isn't structural there — but
-`spudgpu_depth_bounds_capabilities::supported` will be `false` on anything
+(see `carrottus/CLAUDE.md`) — except `CrGPUDynamicIndexing`, which needs
+bindless descriptor indexing, and `CrGPUBundles`, which needs
+`CRGPU_EXT_BUNDLES`; neither is buildable on Metal (see above).
+`CrGPUDepthBoundsTest` *does* build and run on Metal — its
+`CRGPU_EXT_DEPTH_BOUNDS_TEST` gap isn't structural there — but
+`crgpu_depth_bounds_capabilities::supported` will be `false` on anything
 short of `MTLGPUFamilyApple10` hardware, so the animated bounds window has
 no visible effect on most Metal devices today even though the sample runs.
 
@@ -490,25 +490,25 @@ Every sample takes two optional arguments:
   window does, through the same cleanup. Without it a sample runs until its
   window is closed. Use it to run a sample unattended, under a validation
   layer or a debugger.
-- `--device N`: use the Nth adapter `spudgpu_enumerate_adapters` lists (0 if
+- `--device N`: use the Nth adapter `crgpu_adapter_enumerate` lists (0 if
   not given).
 
-`SpudGPURayTracing` also takes `--mode hello|lighting|procedural`, which of
+`CrGPURayTracing` also takes `--mode hello|lighting|procedural`, which of
 the three originals it is (`hello` if not given). Without `--device` it
 takes the first adapter whose `supported_features` has
-`SPUDGPU_FEATURE_RAY_QUERY` and `SPUDGPU_FEATURE_PRESENT`, the features its
+`CRGPU_FEATURE_RAY_QUERY` and `CRGPU_FEATURE_PRESENT`, the features its
 device is created with: chosen by what the adapter can do, never by its
 name or vendor, so the choice is the same on every backend.
 
-Every sample's swap chain names `SPUDGPU_PRESENT_SCALING_ONE_TO_ONE`: its
+Every sample's swap chain names `CRGPU_PRESENT_SCALING_ONE_TO_ONE`: its
 window can't be resized and its back buffers are the window's size, so
 nothing is ever scaled, and one-to-one is the scaling every surface takes.
 HelloTriangle also takes two arguments for looking at the scalings:
 
 - `--scaling one-to-one|stretch|aspect-fit`: the swap chain's present
   scaling (one-to-one if not given). It prints which ones the surface takes
-  (`spudgpu_get_surface_present_scalings`) and stops if that isn't one,
-  then prints the back buffers' real size (`spudgpu_get_swap_chain_desc`)
+  (`crgpu_surface_get_present_scalings`) and stops if that isn't one,
+  then prints the back buffers' real size (`crgpu_swap_chain_get_desc`)
   and draws at that size: on Vulkan without a scaling the surface gives
   its own size.
 - `--window WxH`: a window of W by H while the back buffers stay 1280x720,
@@ -522,27 +522,27 @@ HelloTriangle also takes two arguments for looking at the scalings:
 On Windows 11, Debug, with the `windows-vulkan` preset and
 `VK_LAYER_KHRONOS_validation`, `--frames 300`, on both devices of one
 laptop (Intel Iris Xe, `--device 0`; NVIDIA RTX A2000, `--device 1`), every
-sample exits cleanly with no validation message. `SpudGPUMeshShaders` exits 1
+sample exits cleanly with no validation message. `CrGPUMeshShaders` exits 1
 on the Intel device, by design: that driver reports no mesh shading.
 
-Before that run the samples no longer compiled: SpudGPU had replaced
+Before that run the samples no longer compiled: Carrottus GPU had replaced
 `color_attachment_format` with `color_attachment_formats[]` and
 `color_attachment_count`. Once built, the run found:
 
-- `SpudGPUBundles`: SpudGPU's header said a bundle inherits the direct
+- `CrGPUBundles`: Carrottus GPU's header said a bundle inherits the direct
   list's viewport and scissor, which a Vulkan secondary command buffer does
   not; the Intel driver crashed on the bundle's first draw. A bundle is now
-  given its viewport and scissor in `spudgpu_bundle_inheritance_desc`, and
-  `spudgpu.h` states the bundle rules for every backend.
-- `SpudGPUDynamicIndexing`: the depth image's transition was recorded into
+  given its viewport and scissor in `crgpu_bundle_inheritance_desc`, and
+  `crgpu.h` states the bundle rules for every backend.
+- `CrGPUDynamicIndexing`: the depth image's transition was recorded into
   the upload list after it had been closed and submitted, so the depth image
   was never transitioned, and the NVIDIA driver crashed recording into the
   finished list. The transition is now recorded each frame.
-- `SpudGPUExecuteIndirect`: SpudGPU's Vulkan device never enabled
+- `CrGPUExecuteIndirect`: Carrottus GPU's Vulkan device never enabled
   `multiDrawIndirect`, so a 256-draw indirect call was invalid. It is enabled
-  where reported, and `SPUDGPU_DEVICE_PROPERTIES::max_draw_indirect_count`
+  where reported, and `CRGPU_DEVICE_PROPERTIES::max_draw_indirect_count`
   says how many draws one call takes; the sample splits its call by it.
-- `SpudGPUMeshShaders`: SpudGPU's Vulkan `spudgpu_cmd_push_constants` knew
+- `CrGPUMeshShaders`: Carrottus GPU's Vulkan `crgpu_command_list_push_graphics_constants` knew
   only vertex, fragment and compute stages and dropped a mesh-stage push.
   With that fixed, the sample read freed memory every frame (its meshlet
   subsets pointed into the file buffer it had freed); they are now copied.
@@ -550,37 +550,37 @@ Before that run the samples no longer compiled: SpudGPU had replaced
 The same day, with the `windows-d3d12` preset (Debug) under cdb, every
 sample runs 300 frames with no D3D12 debug layer message on both devices:
 the Iris Xe (`--device 0`) and the NVIDIA RTX A2000 (`--device 1`).
-`SpudGPUMeshShaders` exits 1 on the Iris Xe, which has no mesh shading. The
-Iris Xe was listed on D3D12 only after SpudGPU's D3D12 backend stopped
+`CrGPUMeshShaders` exits 1 on the Iris Xe, which has no mesh shading. The
+Iris Xe was listed on D3D12 only after Carrottus GPU's D3D12 backend stopped
 requiring feature level 12_2 (it now requires 12_0); before that, D3D12
 listed the NVIDIA device alone, as device 0. Two samples failed there
-first, both from SpudGPU's D3D12 backend:
+first, both from Carrottus GPU's D3D12 backend:
 
-- `SpudGPUMeshShaders`: `CreateGraphicsPipelineState` failed, the root
+- `CrGPUMeshShaders`: `CreateGraphicsPipelineState` failed, the root
   signature not covering the shader's `t3`. SPIRV-Cross declared the GLSL
   `readonly` storage buffers as SRVs, while the backend's root signature and
   descriptors make every storage buffer a UAV; it now compiles them as UAVs.
-- `SpudGPUDynamicIndexing`, and `SpudGPUMeshShaders` once its pipeline was
+- `CrGPUDynamicIndexing`, and `CrGPUMeshShaders` once its pipeline was
   made: two errors on every draw, a bound table in a descriptor heap that
   was no longer set. Each descriptor pool, and the bindless state, had its
   own shader-visible heaps, and D3D12 sets one CBV/SRV/UAV heap and one
   sampler heap at a time, so binding a set from a second pool unbound the
   first's. They now all take ranges of the device's two heaps.
 
-Later on 2026-10-16 every sample ran again, the same way, against SpudLib
+Later on 2026-10-16 every sample ran again, the same way, against Carrottus
 with the Mac's Metal work, the D3D12 fix for 2D views of a layer past the
 first and for cube views to render to or store into, storage cube images
 in D3D12 shaders, and Vulkan's `imageCubeArray`. On Vulkan every sample
-exited cleanly with no validation message on both devices (`SpudGPUMeshShaders`
+exited cleanly with no validation message on both devices (`CrGPUMeshShaders`
 exits 1 on the Iris Xe, as before). On D3D12 there was no debug layer
-message on either device but one: `SpudGPUMeshShaders` on the Iris Xe
+message on either device but one: `CrGPUMeshShaders` on the Iris Xe
 returned from `main` without destroying the instance when it found no mesh
 shading, and the debug layer reported the device's live objects at process
 exit. Every sample now leaves `main` through one cleanup on every failure:
 each object `main` makes starts as NULL, a failure jumps to the cleanup at
 the end, which waits for the queue if there is one and destroys whatever
 exists, and the helpers that called `exit(1)` (reading a file, loading a
-shader, uploading a texture, `SpudGPUHeaps`' `check`) return NULL or false
+shader, uploading a texture, `CrGPUHeaps`' `check`) return NULL or false
 for the caller to jump. Only a failed `SDL_Init` still returns directly. Run
 again on both devices and both backends, every sample is clean as above, and
 each run with `--device 9` (a failure right after the instance is made)
@@ -590,27 +590,27 @@ no debug layer message.
 
 On 2026-10-22 every sample was built (Debug) and run again on D3D12 and
 Vulkan on Windows 11, on the Intel Iris Xe and the NVIDIA RTX A2000, and on
-D3D12's WARP adapter, after SpudGPU's adapter and device change. That was the
-first build and run of `SpudGPUHeaps` on any backend. Neither backend built at
-first: SpudAudio's WASAPI backend named `max_align_t`, which MSVC's C compiler
-doesn't have (`SPUD_MAX_ALIGN`, `spudlib/src/spudallocator.h`, now). The plain
+D3D12's WARP adapter, after Carrottus GPU's adapter and device change. That was the
+first build and run of `CrGPUHeaps` on any backend. Neither backend built at
+first: Carrottus Audio's WASAPI backend named `max_align_t`, which MSVC's C compiler
+doesn't have (`CR_MAX_ALIGN`, `carrottus/src/crallocator.h`, now). The plain
 runs, 300 frames each, were clean on both backends: no validation layer or
-debug layer message and exit 0, but for `SpudGPUMeshShaders` on the Iris Xe,
+debug layer message and exit 0, but for `CrGPUMeshShaders` on the Iris Xe,
 which has no mesh shading and exits 1 as before. Three stricter runs found two
-Vulkan bugs, both fixed in SpudLib:
+Vulkan bugs, both fixed in Carrottus:
 
 - Synchronization validation (`VK_KHRONOS_VALIDATION_VALIDATE_SYNC=1`)
   reported a WRITE_AFTER_READ against `vkAcquireNextImageKHR` in every
   sample: the barrier that takes a back buffer out of `UNDEFINED` or
   `PRESENT_SRC` started at `TOP_OF_PIPE` (or `BOTTOM_OF_PIPE` out of
-  `SPUDGPU_RESOURCE_STATE_PRESENT`), which doesn't chain to the acquire
+  `CRGPU_RESOURCE_STATE_PRESENT`), which doesn't chain to the acquire
   semaphore's wait at `COLOR_ATTACHMENT_OUTPUT`. Such a barrier now starts at
   its destination stage.
 - GPU-assisted validation (`VK_LAYER_GPUAV_ENABLE=1`) reported
   `VUID-VkDrawIndirectCommand-firstInstance-00501` in
-  `SpudGPUExecuteIndirect`: its draws' `first_instance` is the triangle's
+  `CrGPUExecuteIndirect`: its draws' `first_instance` is the triangle's
   index, and the Vulkan device never enabled `drawIndirectFirstInstance`.
-  That is `SPUDGPU_FEATURE_DRAW_INDIRECT_FIRST_INSTANCE` now, which the
+  That is `CRGPU_FEATURE_DRAW_INDIRECT_FIRST_INSTANCE` now, which the
   sample asks for.
 
 D3D12 with GPU-based validation on (a temporary
@@ -621,13 +621,13 @@ image on D3D12 and on Vulkan.
 
 ## Present scaling run, 2026-10-23
 
-After SpudGPU's present scaling (every sample names one), on Windows 11,
+After Carrottus GPU's present scaling (every sample names one), on Windows 11,
 Debug, both presets, both devices (Intel Iris Xe `--device 0`, NVIDIA RTX
 A2000 `--device 1`): the first build of the change on D3D12 and the first
 run on either backend. Every sample ran 300 frames with the D3D12 debug
 layer, the Vulkan validation layer, and the validation layer with
 `VK_LAYER_VALIDATE_SYNC=1`: no layer message, exit 0, but for
-`SpudGPUMeshShaders` on the Iris Xe (no mesh shading, exit 1 as before).
+`CrGPUMeshShaders` on the Iris Xe (no mesh shading, exit 1 as before).
 
 HelloTriangle, `--window 900x900 --frames 600`, each `--scaling`:
 
@@ -640,9 +640,9 @@ HelloTriangle, `--window 900x900 --frames 600`, each `--scaling`:
 
 A screenshot of each was taken while it ran. On the RTX A2000 the Vulkan
 captures of one-to-one and stretch are byte for byte the D3D12 ones. Two
-SpudGPU Vulkan bugs were found and fixed first (`spudlib/CLAUDE.md`,
+Carrottus GPU Vulkan bugs were found and fixed first (`carrottus/CLAUDE.md`,
 "Present scaling"): HelloTriangle crashed on the RTX A2000 in
-`spudgpu_get_surface_present_scalings`, and its surface offered aspect-fit
+`crgpu_surface_get_present_scalings`, and its surface offered aspect-fit
 and showed a stretch, so a Win32 surface no longer offers it. HelloTriangle
 itself drew a 1280x720 render area whatever its back buffers were, larger
 than the Iris Xe's 900x900; it now reads their size and prints it (the old
@@ -655,26 +655,26 @@ Plasma on Wayland, on an Intel Iris Xe (Mesa ANV 26.2.4), with
 `VK_LAYER_KHRONOS_validation` reporting errors, warnings and performance
 warnings: no message from any of them, and each closed cleanly. SDL3 opens
 the windows as native Wayland windows, and on Vulkan SDL makes the surface
-itself, so `SPUDGPU_LINUX_WSI` doesn't apply to the samples. None of the
+itself, so `CRGPU_LINUX_WSI` doesn't apply to the samples. None of the
 windows is resizable (each is made with no flags, as the originals' are
 fixed-size), so this run tested no swap chain resize; the compositor kept
-each at its size. `SpudGPUMeshShaders` refused to start: the Iris Xe has no
+each at its size. `CrGPUMeshShaders` refused to start: the Iris Xe has no
 mesh shading.
 
-The screenshots showed six samples upside down. SpudGPU's clip space is
+The screenshots showed six samples upside down. Carrottus GPU's clip space is
 Vulkan's on every backend (+Y down; D3D12 and Metal flip Y when they
 translate a shader), and those ports had kept the originals' +Y-up data:
-`HelloTexture`, `SpudGPUDepthBoundsTest` and `SpudGPUHeaps` now negate Y
-in their clip-space vertices, and `SpudGPUExecuteIndirect`,
-`SpudGPUBundles` and `SpudGPUDynamicIndexing` negate the projection's Y
+`HelloTexture`, `CrGPUDepthBoundsTest` and `CrGPUHeaps` now negate Y
+in their clip-space vertices, and `CrGPUExecuteIndirect`,
+`CrGPUBundles` and `CrGPUDynamicIndexing` negate the projection's Y
 scale. Run again, all six draw the right way up, still with no validation
-message. `SpudGPUMeshShaders` has the same projection and also culls with
+message. `CrGPUMeshShaders` has the same projection and also culls with
 D3D12's clockwise front faces, which the flip reverses; it is left as it
 was until it can be run on a device with mesh shading.
 
 ## Ray tracing run, 2026-10-31
 
-`SpudGPURayTracing`'s first build and run, on Windows 11 (ThinkPad P1 Gen
+`CrGPURayTracing`'s first build and run, on Windows 11 (ThinkPad P1 Gen
 5), Debug, from the workspace root's `build-windows-d3d12` and
 `build-windows-vulkan` (the sample target alone: the root build stops in
 libdemo, which is deprecated), with slangc 2026.17 and DXC 1.9.0.5512 from
@@ -685,7 +685,7 @@ directory, in each of the three modes:
 | Backend, adapter | Validation | Result |
 |---|---|---|
 | D3D12, RTX A2000 (`--device 1`) | debug layer; GPU-based validation (`d3dconfig`, scoped to the sample, set back after) | exit 0, no message |
-| D3D12, Iris Xe (`--device 0`) | debug layer | refused: "doesn't support ray queries (no SPUDGPU_FEATURE_RAY_QUERY)", exit 1, no message |
+| D3D12, Iris Xe (`--device 0`) | debug layer | refused: "doesn't support ray queries (no CRGPU_FEATURE_RAY_QUERY)", exit 1, no message |
 | D3D12, WARP (`--device 2`) | debug layer; GPU-based validation (hello and lighting) | WARP reports ray queries (raytracing tier 1.1) and draws all three modes as the A2000 does: exit 0, no message. The procedural mode takes about 0.4 s a frame there (60 frames in 26 s; 300 in 123 s) |
 | Vulkan, RTX A2000 (`--device 1`) | validation layer (errors, warnings, performance warnings); synchronization validation (`VK_LAYER_VALIDATE_SYNC=1`); GPU-assisted validation (`VK_LAYER_GPUAV_ENABLE=1`) | exit 0, no message but GPU-AV's notices of its own settings |
 | Vulkan, Iris Xe (`--device 0`) | the same three | refused as on D3D12, exit 1, no message |
@@ -751,22 +751,22 @@ earlier Fedora install (not recorded). Nothing froze in any of the 108
 runs, every one of them under a time limit with a thread dump and the
 kernel log ready for a hang. Not run: a sample left running unlimited, and
 a resize (the samples' windows are fixed-size). SDL3 made native Wayland
-windows; `SPUDGPU_LINUX_WSI` (`Xlib` in the preset) doesn't apply, SDL
+windows; `CRGPU_LINUX_WSI` (`Xlib` in the preset) doesn't apply, SDL
 making the surface.
 
 The same day under the sanitizers (`../prompts/fedora_linux_sanitizers.md`;
 Debug, `build-linux-vulkan-asan` and `-tsan` on the `linux-vulkan` preset
-with spudlib's `sanitize-asan`/`-tsan` flags, the validation layer on):
+with carrottus's `sanitize-asan`/`-tsan` flags, the validation layer on):
 every sample `--frames 300` on the Iris Xe and the A2000 under each, the
 ray tracing sample in its three modes. One report was ours:
-SpudGPUDynamicIndexing's BC1 decoder shifted a byte promoted to `int` left
+CrGPUDynamicIndexing's BC1 decoder shifted a byte promoted to `int` left
 by 24 (UBSan), widened first now, then clean on both. The rest are
 third-party (`../DECISIONS.md` card S37): NVK leaks 64 bytes per device
 (every sample on the A2000); ANV leaks an internal kernel it loads from
 Mesa's disk cache in `vkCmdDrawIndirect` (ExecuteIndirect on the Iris Xe,
 gone with `MESA_SHADER_CACHE_DISABLE=true`); under TSan the validation
 layer's queue thread races its own `DestroyFence` at shutdown (every
-windowed sample, after `spudgpu_queue_wait_idle`; gone with the layer off),
+windowed sample, after `crgpu_command_queue_wait_idle`; gone with the layer off),
 and with the layer off libdbus, loaded by SDL3, reports a lock-order
 inversion of its own at exit. MeshShaders and RayTracing refused as before.
 
