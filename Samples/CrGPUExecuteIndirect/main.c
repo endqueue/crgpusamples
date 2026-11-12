@@ -581,6 +581,13 @@ int main(int argc, char **argv) {
 		crgpu_buffer_flush(scene_buffer, 0, sizeof(scene_cb_data));
 
 		uint32_t image_index               = crgpu_swap_chain_acquire_next_image(swap_chain);
+		// No back buffer: the device was lost, or the surface is gone. The
+		// window can't be resized, so none will come back; nothing is recorded
+		// into a view that isn't there.
+		if (image_index == CR_UINT32_MAX) {
+			fprintf(stderr, "crgpu_swap_chain_acquire_next_image failed: no back buffer to render into\n");
+			goto cleanup;
+		}
 		crgpu_image_view backbuffer_view = crgpu_swap_chain_get_image_view(swap_chain, image_index);
 
 		crgpu_command_allocator_reset(command_allocator);
@@ -656,7 +663,11 @@ int main(int argc, char **argv) {
 
 		crgpu_command_list_end(cmd);
 
-		crgpu_command_queue_submit_lists_synced(graphics_queue, &cmd, 1, swap_chain);
+		const CR_RESULT submitted = crgpu_command_queue_submit_lists_synced(graphics_queue, &cmd, 1, swap_chain);
+		if (CR_FAILED(submitted)) {
+			fprintf(stderr, "crgpu_command_queue_submit_lists_synced failed: %s\n", cr_result_str(submitted));
+			goto cleanup;
+		}
 		crgpu_swap_chain_present(swap_chain);
 	}
 
